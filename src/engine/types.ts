@@ -25,10 +25,13 @@ export interface PixelPosition {
 export interface GameState {
     board: Board;
     turn: PieceColor;
+    result: GameResult;
+    endReason: "checkmate" | "stalemate" | null;
+}
+
+export interface UIState {
     selected: Position | null;
     hovered: Position | null;
     draggedFrom: Position | null;
     isDragging: boolean;
-    result: GameResult;
-    endReason: "checkmate" | "stalemate" | null;
-}
+};

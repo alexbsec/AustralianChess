@@ -1,4 +1,38 @@
-import type { Board, GameState, PieceColor, PieceKind } from "./types";
+import { CloneBoard, IsFriendlyPiece, IsInsideBoard, IsSameSquare } from "./board";
+import { GetOppositeColor, IsKingInCheck } from "./engine";
+import type { Board, GameState, PieceColor, PieceKind, Position } from "./types";
+
+export function TryApplyMove(
+    gameState: GameState,
+    fromPos: Position,
+    toPos: Position,
+): GameState | null {
+    if (gameState.result !== null) {
+        return null;
+    }
+
+    if (!CanMovePiece(fromPos.row, fromPos.col, toPos.row, toPos.col, gameState)) {
+        return null;
+    }
+
+    const movingColor = gameState.turn;
+    const nextTurn = GetOppositeColor(movingColor);
+    const nextBoard = ApplyMoveToBoard(
+        gameState.board,
+        fromPos.row,
+        fromPos.col,
+        toPos.row,
+        toPos.col
+    );
+
+    return {
+        ...gameState,
+        board: nextBoard,
+        turn: nextTurn,
+        result: null,
+        endReason: null,
+    };
+}
 
 export function CanMovePiece(
     fromRow: number,
@@ -54,15 +88,6 @@ export function HasAnyLegalMove(gameState: GameState): boolean {
     return false;
 }
 
-export function IsCheckmate(gameState: GameState): boolean {
-    console.log("checking for mate...");
-    return IsKingInCheck(gameState.board, gameState.turn) && !HasAnyLegalMove(gameState);
-}
-
-export function IsStalemate(gameState: GameState): boolean {
-    return !IsKingInCheck(gameState.board, gameState.turn) && !HasAnyLegalMove(gameState);
-}
-
 function CanMovePiecePseudoLegal(
     fromRow: number,
     fromCol: number,
@@ -109,7 +134,7 @@ function CanMovePiecePseudoLegal(
     return false;
 }
 
-function CanMoveKing(
+export function CanMoveKing(
     fromRow: number,
     fromCol: number,
     toRow: number,
@@ -127,7 +152,7 @@ function CanMoveKing(
     return rowDiff <= 1 && colDiff <= 1;
 }
 
-function CanMoveQueen(
+export function CanMoveQueen(
     fromRow: number,
     fromCol: number,
     toRow: number,
@@ -140,7 +165,7 @@ function CanMoveQueen(
     );
 }
 
-function CanMoveBishop(
+export function CanMoveBishop(
     fromRow: number,
     fromCol: number,
     toRow: number,
@@ -177,7 +202,7 @@ function CanMoveBishop(
     return true;
 }
 
-function CanMoveKangaroo(
+export function CanMoveKangaroo(
     fromRow: number,
     fromCol: number,
     toRow: number,
@@ -194,7 +219,7 @@ function CanMoveKangaroo(
     );
 }
 
-function CanMoveKnight(
+export function CanMoveKnight(
     fromRow: number,
     fromCol: number,
     toRow: number,
@@ -209,7 +234,7 @@ function CanMoveKnight(
     );
 }
 
-function CanMoveOligarch(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+export function CanMoveOligarch(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
     const oligarchPiece = board[fromRow][fromCol];
 
     if (oligarchPiece === null) {
@@ -225,7 +250,7 @@ function CanMoveOligarch(fromRow: number, fromCol: number, toRow: number, toCol:
     return CanMoveKing(fromRow, fromCol, toRow, toCol, board);
 }
 
-function CanMoveRook(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+export function CanMoveRook(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
     const isSameRow = fromRow === toRow;
     const isSameCol = fromCol === toCol;
 
@@ -252,7 +277,7 @@ function CanMoveRook(fromRow: number, fromCol: number, toRow: number, toCol: num
     return true;
 }
 
-function CanMovePawn(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board, color: PieceColor): boolean {
+export function CanMovePawn(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board, color: PieceColor): boolean {
     const direction = color === "black" ? 1 : -1;
     const rowDiff = toRow - fromRow;
     const colDiff = toCol - fromCol;
@@ -284,9 +309,7 @@ function CanMovePawn(fromRow: number, fromCol: number, toRow: number, toCol: num
     return false;
 }
 
-function CloneBoard(board: Board): Board {
-    return board.map((row) => row.map((square) => square));
-}
+
 
 function ApplyMoveToBoard(
     board: Board,
@@ -304,112 +327,7 @@ function ApplyMoveToBoard(
     return nextBoard;
 }
 
-function FindKing(board: Board, color: PieceColor): { row: number; col: number } | null {
-    for (let row = 0; row < 12; row++) {
-        for (let col = 0; col < 12; col++) {
-            const piece = board[row][col];
-            if (piece !== null && piece.kind === "king" && piece.color === color) {
-                return { row, col };
-            }
-        }
-    }
 
-    return null;
-}
-
-function CanPieceAttackSquare(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    board: Board,
-): boolean {
-    const piece = board[fromRow][fromCol];
-    if (piece === null) {
-        return false;
-    }
-
-    if (!IsInsideBoard(toRow, toCol)) {
-        return false;
-    }
-
-    if (IsSameSquare(fromRow, fromCol, toRow, toCol)) {
-        return false;
-    }
-
-    switch (piece.kind) {
-        case "pawn": {
-            const direction = piece.color === "black" ? 1 : -1;
-            const rowDiff = toRow - fromRow;
-            const colDiff = Math.abs(toCol - fromCol);
-
-            return rowDiff === direction && colDiff === 1;
-        }
-
-        case "rook":
-            return CanMoveRook(fromRow, fromCol, toRow, toCol, board);
-
-        case "bishop":
-            return CanMoveBishop(fromRow, fromCol, toRow, toCol, board);
-
-        case "queen":
-            return CanMoveQueen(fromRow, fromCol, toRow, toCol, board);
-
-        case "knight":
-            return CanMoveKnight(fromRow, fromCol, toRow, toCol);
-
-        case "kangaroo":
-            return CanMoveKangaroo(fromRow, fromCol, toRow, toCol);
-
-        case "king":
-            return CanMoveKing(fromRow, fromCol, toRow, toCol, board);
-
-        case "oligarch":
-            return CanMoveOligarch(fromRow, fromCol, toRow, toCol, board);
-
-        default:
-            return false;
-    }
-}
-
-function IsSquareAttacked(
-    row: number,
-    col: number,
-    byColor: PieceColor,
-    board: Board,
-): boolean {
-    for (let fromRow = 0; fromRow < 12; fromRow++) {
-        for (let fromCol = 0; fromCol < 12; fromCol++) {
-            const piece = board[fromRow][fromCol];
-
-            if (piece === null || piece.color !== byColor) {
-                continue;
-            }
-
-            if (CanPieceAttackSquare(fromRow, fromCol, row, col, board)) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-function IsKingInCheck(board: Board, color: PieceColor): boolean {
-    const kingPosition = FindKing(board, color);
-    if (kingPosition === null) {
-        return true;
-    }
-
-    const enemyColor: PieceColor = color === "white" ? "black" : "white";
-
-    return IsSquareAttacked(
-        kingPosition.row,
-        kingPosition.col,
-        enemyColor,
-        board
-    );
-}
 
 function HasAdjacentFriendlyPiece(
     row: number,
@@ -469,15 +387,3 @@ function IsPieceAtStartingPosition(
     return startingColumnsByPiece[pieceKind].includes(col);
 }
 
-function IsInsideBoard(row: number, col: number): boolean {
-    return row >= 0 && row < 12 && col >= 0 && col < 12;
-}
-
-function IsSameSquare(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
-    return fromRow == toRow && fromCol == toCol;
-}
-
-function IsFriendlyPiece(row: number, col: number, color: PieceColor, board: Board): boolean {
-    const target = board[row][col];
-    return target !== null && target.color === color;
-}

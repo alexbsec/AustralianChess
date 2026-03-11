@@ -1,5 +1,5 @@
 import "./style.css";
-import { InitializeBoard } from "./board/game";
+import { InitializeGame } from "./game/game";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -11,4 +11,8 @@ const boardElement = document.createElement("div");
 boardElement.classList.add("board");
 app.appendChild(boardElement);
 
-InitializeBoard(boardElement);
+document.addEventListener("click", (event) => {
+    console.log("DOCUMENT CLICK", event.target);
+}, true);
+
+InitializeGame(boardElement);

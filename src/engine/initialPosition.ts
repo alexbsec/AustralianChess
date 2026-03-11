@@ -1,10 +1,10 @@
 import type { Board, Piece, PieceColor, PieceKind } from "./types"
 
-export function CreatePiece(kind: PieceKind, color: PieceColor): Piece {
+function CreatePiece(kind: PieceKind, color: PieceColor): Piece {
     return { kind, color };
 }
 
-export function CreateEmptyBoard(): Board {
+function CreateEmptyBoard(): Board {
     return Array.from({ length: 12 }, () => 
         Array.from({ length: 12 }, () => null)
     );

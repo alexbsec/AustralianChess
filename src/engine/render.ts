@@ -1,5 +1,5 @@
 import { CanMovePiece } from "./movements";
-import type { Piece, Board, Position, GameState } from "./types";
+import type { Piece, Board, Position, GameState, UIState } from "./types";
 
 function GetPieceImagePath(piece: Piece): string {
     return `/pieces/${piece.color}/${piece.color}_${piece.kind}.png`;
@@ -9,7 +9,7 @@ function CreateSquareElement(
     row: number,
     col: number,
     piece: Piece | null,
-    gameState: GameState,
+    uiState: UIState,
     possibleMoves: Position[] = [],
 ): HTMLDivElement {
     const square = document.createElement("div");
@@ -22,9 +22,9 @@ function CreateSquareElement(
     square.dataset.col = String(col);
 
     if (
-        gameState.selected &&
-        gameState.selected.row === row &&
-        gameState.selected.col === col
+        uiState.selected &&
+        uiState.selected.row === row &&
+        uiState.selected.col === col
     ) {
         square.classList.add("selected");
     }
@@ -56,6 +56,7 @@ export function RenderBoard(
     board: Board,
     container: HTMLElement,
     gameState: GameState,
+    uiState: UIState,
     possibleMoves: Position[] = [],
 ): void {
     container.innerHTML = "";
@@ -63,7 +64,7 @@ export function RenderBoard(
     for (let row = 0; row < 12; row++) {
         for (let col = 0; col < 12; col++) {
             const piece = board[row][col];
-            const square = CreateSquareElement(row, col, piece, gameState, possibleMoves);
+            const square = CreateSquareElement(row, col, piece, uiState, possibleMoves);
             container.appendChild(square);
         }
     }
