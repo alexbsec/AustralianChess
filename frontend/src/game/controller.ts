@@ -32,7 +32,7 @@ export class GameController {
         const possibleMoves = this.m_UIState.selected === null ? [] : GetPseudoLegalMoves(this.m_GameState, this.m_UIState.selected.row,
             this.m_UIState.selected.col);
 
-        RenderBoard(this.m_GameState.board, this.m_Container, this.m_GameState, this.m_UIState, possibleMoves);
+        RenderBoard(this.m_GameState.board, this.m_Container, this.m_UIState, possibleMoves);
         UpdateGameOverModal(this.m_GameState, () => this.restartGame());
     }
 

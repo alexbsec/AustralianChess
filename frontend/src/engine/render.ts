@@ -55,7 +55,6 @@ function CreateSquareElement(
 export function RenderBoard(
     board: Board,
     container: HTMLElement,
-    gameState: GameState,
     uiState: UIState,
     possibleMoves: Position[] = [],
 ): void {
