@@ -3,8 +3,9 @@ package ws
 import "github.com/alexbsec/AustralianChess/backend/internal/chess"
 
 type GameStateMessage struct {
-	Type      string          `json:"type"`
-	GameState chess.GameState `json:"gameState"`
+	Type        string            `json:"type"`
+	GameState   chess.GameState   `json:"gameState"`
+	PlayerColor *chess.PieceColor `json:"playerColor,omitempty"`
 }
 
 type MovePieceResponse struct {

@@ -47,6 +47,14 @@ func (h *Handler) HandleRoom(ctx *gin.Context) {
 		return
 	}
 
+	playerId := ctx.Query("playerId")
+	if playerId == "" {
+		ctx.JSON(http.StatusBadRequest, ErrorMessage{
+			Type:    "error",
+			Message: "missing player",
+		})
+	}
+
 	reqCtx := ctx.Request.Context()
 	room, err := h.roomService.FetchRoom(reqCtx, roomId)
 	if err != nil {
@@ -63,45 +71,80 @@ func (h *Handler) HandleRoom(ctx *gin.Context) {
 		return
 	}
 
-	h.hub.AddClient(roomId, conn)
+	client, err := h.hub.AddClient(roomId, playerId, conn)
+	if err != nil {
+		log.Printf("failed to add client to hub: %v", err)
+		_ = conn.Close()
+		return
+	}
+
 	defer func() {
 		h.hub.RemoveClient(roomId, conn)
 		_ = conn.Close()
 	}()
 
 	if err := conn.WriteJSON(GameStateMessage{
-		Type:      "game_state",
-		GameState: *room.GameState,
+		Type:        "game_state",
+		GameState:   *room.GameState,
+		PlayerColor: client.Color,
 	}); err != nil {
 		log.Printf("failed to write initial game state: %v", err)
 		return
 	}
 
-	h.loop(ctx, roomId, conn)
+	h.loop(reqCtx, roomId, client)
 }
 
-func (h *Handler) loop(ctx context.Context, roomId string, conn *websocket.Conn) {
+func (h *Handler) loop(ctx context.Context, roomId string, client *Client) {
 	for {
-		_, data, err := conn.ReadMessage()
+		_, data, err := client.Conn.ReadMessage()
 		if err != nil {
 			log.Printf("failed to read message: %v", err)
 			return
 		}
 
+		if client.Role == Spectator {
+			if err := client.Conn.WriteJSON(ErrorMessage{
+				Type:    "error",
+				Message: "spectators cannot send commands",
+			}); err != nil {
+				log.Printf("failed to write spectator error: %v", err)
+				return
+			}
+			continue
+		}
+
 		cmd, err := h.wsParser.ParseMessage(roomId, data)
 		if err != nil {
 			log.Printf("failed to parse message: %v", err)
-			return
+			if err := client.Conn.WriteJSON(ErrorMessage{
+				Type:    "error",
+				Message: err.Error(),
+			}); err != nil {
+				log.Printf("failed to write parse error: %v", err)
+				return
+			}
+			continue
 		}
+
+		cmd = cmd.SetPlayerId(client.PlayerId)
+		cmd = cmd.SetRequesterColor(*client.Color)
 
 		result, err := h.roomService.ExecuteCommand(ctx, cmd)
 		if err != nil {
 			log.Printf("failed to execute command: %v", err)
-			return
+			if err := client.Conn.WriteJSON(ErrorMessage{
+				Type:    "error",
+				Message: err.Error(),
+			}); err != nil {
+				log.Printf("failed to write execute error: %v", err)
+				return
+			}
+			continue
 		}
 
-		if err := conn.WriteJSON(result); err != nil {
-			log.Printf("failed to write response: %v", err)
+		if err := h.hub.Broadcast(roomId, result); err != nil {
+			log.Printf("failed to broadcast response: %v", err)
 			return
 		}
 	}

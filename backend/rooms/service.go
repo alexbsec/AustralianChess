@@ -34,9 +34,11 @@ func (s *Service) CreateRoom(ctx context.Context) (CreateRoomResponse, error) {
 	gameState := chess.NewGame(board)
 
 	room := &Room{
-		Id:        uuid.New().String(),
-		GameState: gameState,
-		CreatedAt: time.Now(),
+		Id:          uuid.New().String(),
+		GameState:   gameState,
+		GameStarted: false,
+		PlayerCount: 0,
+		CreatedAt:   time.Now(),
 	}
 
 	s.mtx.Lock()
@@ -83,21 +85,21 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parse
 		return nil, errors.New("cannot execute nil command")
 	}
 
+	room, err := s.FetchRoom(ctx, cmd.GetRoomId())
+	if err != nil {
+		return nil, err
+	}
+
 	switch cmd.(type) {
 	case parser.MoveCommand:
 		moveCmd := cmd.(parser.MoveCommand)
-		return s.handleMoveCommand(ctx, moveCmd)
+		return s.handleMoveCommand(ctx, room, moveCmd)
 	default:
 		return nil, errors.New("unknown command")
 	}
 }
 
-func (s *Service) handleMoveCommand(ctx context.Context, cmd parser.MoveCommand) (parser.Result, error) {
-	room, err := s.FetchRoom(ctx, cmd.RoomId)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd parser.MoveCommand) (parser.Result, error) {
 	result := parser.MoveResult{
 		RoomId:    cmd.RoomId,
 		Moved:     false,

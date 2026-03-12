@@ -7,9 +7,11 @@ import (
 )
 
 type Room struct {
-	Id        string
-	GameState *chess.GameState
-	WhiteId   string
-	BlackId   string
-	CreatedAt time.Time
+	Id          string
+	GameState   *chess.GameState
+	WhiteId     string
+	BlackId     string
+	PlayerCount int
+	GameStarted bool
+	CreatedAt   time.Time
 }
