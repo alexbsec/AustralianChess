@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/alexbsec/AustralianChess/backend/internal/ws"
 	"github.com/alexbsec/AustralianChess/backend/rooms"
 	"github.com/gin-gonic/gin"
 )
@@ -12,9 +13,11 @@ func RoomHandler(
 	ctx context.Context,
 	routerGroup *gin.RouterGroup,
 	roomService rooms.IService,
+	wsHandler *ws.Handler,
 ) {
 	routerGroup.Handle("GET", "/room/create", MakeNewRoom(roomService))
 	routerGroup.Handle("GET", "/room/:id", ServeRoom(roomService))
+	routerGroup.Handle("GET", "/ws/room/:id", wsHandler.HandleRoom)
 }
 
 func MakeNewRoom(roomService rooms.IService) gin.HandlerFunc {

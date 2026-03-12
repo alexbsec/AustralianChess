@@ -3,6 +3,7 @@ package gin
 import (
 	"context"
 
+	"github.com/alexbsec/AustralianChess/backend/internal/ws"
 	"github.com/alexbsec/AustralianChess/backend/rooms"
 	"github.com/gin-gonic/gin"
 )
@@ -10,6 +11,7 @@ import (
 func MakeHandlers(
 	ctx context.Context,
 	roomService rooms.IService,
+	wsHandler *ws.Handler,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -18,7 +20,7 @@ func MakeHandlers(
 	routerGroup.Use(gin.Logger())
 
 	if roomService != nil {
-		RoomHandler(ctx, routerGroup, roomService)
+		RoomHandler(ctx, routerGroup, roomService, wsHandler)
 	}
 
 	return router

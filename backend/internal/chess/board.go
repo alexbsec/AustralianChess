@@ -1,5 +1,7 @@
 package chess
 
+import "fmt"
+
 type SquareColor int
 
 const (
@@ -9,6 +11,11 @@ const (
 
 const rows = 12
 const cols = 12
+
+type Position struct {
+	Row int `json:"row"`
+	Col int `json:"col"`
+}
 
 type Square struct {
 	Color SquareColor `json:"color"`
@@ -42,6 +49,22 @@ func NewInitialBoard() Board {
 
 	addPiecesToBoard(&board)
 	return board
+}
+
+func (b Board) GetPiece(position Position) *Piece {
+	square := b.Data[position.Row][position.Col]
+	return square.Piece
+}
+
+func (b *Board) MovePiece(fromPos Position, toPos Position) error {
+	piece := b.GetPiece(fromPos)
+	if piece == nil {
+		return fmt.Errorf("no piece to move at position: %v", fromPos)
+	}
+
+	b.Data[fromPos.Row][fromPos.Col].Piece = nil
+	b.Data[toPos.Row][toPos.Col].Piece = piece
+	return nil
 }
 
 func addPiecesToBoard(board *Board) {
