@@ -3,22 +3,27 @@ package rooms
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
+	"github.com/alexbsec/AustralianChess/backend/internal/chess/engine"
 	"github.com/alexbsec/AustralianChess/backend/internal/ws/parser"
 	"github.com/google/uuid"
 )
 
 type Service struct {
-	mtx   sync.RWMutex
-	rooms map[string]*Room
+	mtx         sync.RWMutex
+	rooms       map[string]*Room
+	chessEngine engine.Engine
 }
 
 func NewService() *Service {
 	return &Service{
-		rooms: make(map[string]*Room),
+		rooms:       make(map[string]*Room),
+		chessEngine: engine.NewChessEngine(),
 	}
 }
 
@@ -99,11 +104,20 @@ func (s *Service) handleMoveCommand(ctx context.Context, cmd parser.MoveCommand)
 		GameState: *room.GameState,
 	}
 
-	err = room.GameState.Board.MovePiece(cmd.FromPos, cmd.ToPos)
-	if err == nil {
-		result.Moved = true
-		result.GameState = *room.GameState
+	engineResult := s.chessEngine.ValidateAndMove(room.GameState, cmd.RequesteeColor, cmd.FromPos, cmd.ToPos)
+	switch engineResult.Type {
+	case engine.ErrorResponse:
+		log.Printf("error attempting to move piece: %v", engineResult.Message)
+		return nil, fmt.Errorf("error: %v", engineResult.Message)
+	case engine.FailureResponse:
+		log.Printf("could not move piece due to validation: %v", engineResult.Message)
+		return result, nil
+	default:
+		break
 	}
 
+	result.Moved = true
+	result.GameState = *room.GameState
+	log.Printf("piece moved: %v", engineResult.Message)
 	return result, nil
 }

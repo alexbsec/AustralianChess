@@ -22,3 +22,11 @@ func NewGame(board Board) *GameState {
 		EndReason: nil,
 	}
 }
+
+func OponentColor(color PieceColor) PieceColor {
+	if color == PieceWhite {
+		return PieceBlack
+	}
+
+	return PieceWhite
+}

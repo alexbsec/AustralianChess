@@ -51,6 +51,36 @@ func NewInitialBoard() Board {
 	return board
 }
 
+func (b Board) Clone() Board {
+	rows := len(b.Data)
+
+	newData := make([][]Square, rows)
+
+	for r := range rows {
+		cols := len(b.Data[r])
+		newData[r] = make([]Square, cols)
+
+		for c := range cols {
+			sq := b.Data[r][c]
+
+			var pieceCopy *Piece
+			if sq.Piece != nil {
+				p := *sq.Piece
+				pieceCopy = &p
+			}
+
+			newData[r][c] = Square{
+				Color: sq.Color,
+				Piece: pieceCopy,
+			}
+		}
+	}
+
+	return Board{
+		Data: newData,
+	}
+}
+
 func (b Board) GetPiece(position Position) *Piece {
 	square := b.Data[position.Row][position.Col]
 	return square.Piece
@@ -65,6 +95,10 @@ func (b *Board) MovePiece(fromPos Position, toPos Position) error {
 	b.Data[fromPos.Row][fromPos.Col].Piece = nil
 	b.Data[toPos.Row][toPos.Col].Piece = piece
 	return nil
+}
+
+func (b Board) Dimensions() (int, int) {
+	return len(b.Data), len(b.Data[0])
 }
 
 func addPiecesToBoard(board *Board) {
