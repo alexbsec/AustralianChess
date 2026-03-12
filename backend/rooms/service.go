@@ -90,6 +90,12 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parse
 		return nil, err
 	}
 
+	if !room.GameStarted {
+		return parser.FailedCommandResult{
+			GameStarted: room.GameStarted,
+		}, nil
+	}
+
 	switch cmd.(type) {
 	case parser.MoveCommand:
 		moveCmd := cmd.(parser.MoveCommand)
@@ -97,6 +103,34 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parse
 	default:
 		return nil, errors.New("unknown command")
 	}
+}
+
+func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId string, color chess.PieceColor) (parser.Result, error) {
+	joinResult := parser.PlayerJoinedResult{
+		RoomId:      roomId,
+		PlayerId:    playerId,
+		Success:     false,
+		GameStarted: false,
+	}
+
+	room, err := s.FetchRoom(ctx, roomId)
+	if err != nil {
+		return joinResult, err
+	}
+
+	if color == chess.PieceWhite {
+		room.WhiteId = playerId
+	} else {
+		room.BlackId = playerId
+	}
+
+	if room.WhiteId != "" && room.BlackId != "" {
+		room.GameStarted = true
+	}
+
+	joinResult.GameStarted = room.GameStarted
+	joinResult.Success = true
+	return joinResult, nil
 }
 
 func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd parser.MoveCommand) (parser.Result, error) {

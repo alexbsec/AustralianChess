@@ -6,10 +6,23 @@ type Result interface {
 	IsResult()
 }
 
-type MoveResult struct {
-	RoomId    string
-	Moved     bool
-	GameState chess.GameState
+type FailedCommandResult struct {
+	GameStarted bool `json:"gameStarted"`
 }
 
-func (MoveResult) IsResult() {}
+type MoveResult struct {
+	RoomId    string          `json:"roomId"`
+	Moved     bool            `json:"moved"`
+	GameState chess.GameState `json:"gameState"`
+}
+
+type PlayerJoinedResult struct {
+	RoomId      string `json:"roomId"`
+	PlayerId    string `json:"playerId"`
+	Success     bool   `json:"success"`
+	GameStarted bool   `json:"gameStarted"`
+}
+
+func (MoveResult) IsResult()          {}
+func (PlayerJoinedResult) IsResult()  {}
+func (FailedCommandResult) IsResult() {}

@@ -28,7 +28,9 @@ type RoomClient struct {
 }
 
 func NewRoomClient() *RoomClient {
-	return &RoomClient{}
+	return &RoomClient{
+		Spectators: make(map[*websocket.Conn]*Client),
+	}
 }
 
 func NewClient(roomId string, conn *websocket.Conn) *Client {

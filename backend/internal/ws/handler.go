@@ -92,6 +92,19 @@ func (h *Handler) HandleRoom(ctx *gin.Context) {
 		return
 	}
 
+	if client.Role == PlayerOne || client.Role == PlayerTwo {
+		result, err := h.roomService.UpdatePlayerJoined(ctx, roomId, playerId, *client.Color)
+		if err != nil {
+			log.Printf("failed to player join game: %v", err)
+			return
+		}
+
+		if err := h.hub.Broadcast(roomId, result); err != nil {
+			log.Printf("failed to broadcast player joining room: %v", err)
+			return
+		}
+	}
+
 	h.loop(reqCtx, roomId, client)
 }
 
@@ -128,7 +141,7 @@ func (h *Handler) loop(ctx context.Context, roomId string, client *Client) {
 		}
 
 		cmd = cmd.SetPlayerId(client.PlayerId)
-		cmd = cmd.SetRequesterColor(*client.Color)
+		cmd = cmd.SetColor(*client.Color)
 
 		result, err := h.roomService.ExecuteCommand(ctx, cmd)
 		if err != nil {
