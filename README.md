@@ -30,8 +30,8 @@ A multiplayer, real-time strategy chess variant played on an expanded **12x12 bo
 ## 1. Configure Environment Variables
 ### Copy the sample file to both the root and backend directories
 ```bash
-cp .env.sample .env
-cp .env.sample backend/.env
+cp backend/.env.sample .env
+cp backend/.env.sample backend/.env
 ```
 
 ## 2. Clean Start with Docker
@@ -52,3 +52,14 @@ docker-compose up -d
 ```bash
 docker ps
 ```
+
+# Access Point
+
+### 🌐 Access Points
+
+| Component       | URL                                   | Port (Host) |
+| :-------------- | :------------------------------------ | :---------- |
+| **Frontend UI** | [http://localhost](http://localhost)  | `80`        |
+| **Backend API** | [http://localhost:8080/api/v1](http://localhost:8080/api/v1) | `8080`      |
+| **WebSockets** | `ws://localhost:8080/ws`              | `8080`      |
+| **Database** | `localhost:5432`                      | `5432`      |
