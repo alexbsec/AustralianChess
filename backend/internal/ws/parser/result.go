@@ -7,20 +7,20 @@ type Result interface {
 }
 
 type FailedCommandResult struct {
-	GameStarted bool `json:"gameStarted"`
+	GameStarted bool `json:"game_started"`
 }
 
 type MoveResult struct {
-	RoomId    string          `json:"roomId"`
+	RoomId    string          `json:"room_id"`
 	Moved     bool            `json:"moved"`
-	GameState chess.GameState `json:"gameState"`
+	GameState chess.GameState `json:"game_state"`
 }
 
 type PlayerJoinedResult struct {
-	RoomId      string `json:"roomId"`
-	PlayerId    string `json:"playerId"`
+	RoomId      string `json:"room_id"`
+	PlayerId    string `json:"player_id"`
 	Success     bool   `json:"success"`
-	GameStarted bool   `json:"gameStarted"`
+	GameStarted bool   `json:"game_started"`
 }
 
 func (MoveResult) IsResult()          {}

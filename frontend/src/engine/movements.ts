@@ -1,28 +1,72 @@
-import { CloneBoard, IsFriendlyPiece, IsInsideBoard, IsSameSquare } from "./board";
-import { GetOppositeColor, IsKingInCheck } from "./engine";
+import { cloneBoard, isInsideBoard, isSameSquare } from "./board";
+import { getOppositeColor, isKingInCheck } from "./engine";
 import type { Board, GameState, PieceColor, PieceKind, Position } from "./types";
+import {
+    PIECE_BLACK,
+    PAWN_PIECE,
+    ROOK_PIECE,
+    OLIGARCH_PIECE,
+    KNIGHT_PIECE,
+    KANGAROO_PIECE,
+    BISHOP_PIECE,
+    KING_PIECE,
+    QUEEN_PIECE,
+    BOARD_SIZE
+} from "./constants";
 
-export function TryApplyMove(
+/**
+ * Safely retrieves a piece at given coordinates.
+ */
+function getPiece(board: Board, row: number, col: number) {
+    return board.data[row]?.[col]?.piece ?? null;
+}
+
+/**
+ * Updates a square with a piece or null.
+ */
+function setPiece(
+    board: Board,
+    row: number,
+    col: number,
+    piece: Board["data"][number][number]["piece"],
+): void {
+    if (board.data[row]?.[col]) {
+        board.data[row][col].piece = piece;
+    }
+}
+
+function isFriendlyPieceAt(
+    board: Board,
+    row: number,
+    col: number,
+    color: PieceColor,
+): boolean {
+    const piece = getPiece(board, row, col);
+    return piece !== null && piece.color === color;
+}
+
+/**
+ * Entry point for executing a move. Returns a new State or null if illegal.
+ */
+export function tryApplyMove(
     gameState: GameState,
     fromPos: Position,
     toPos: Position,
 ): GameState | null {
-    if (gameState.result !== null) {
-        return null;
-    }
+    if (gameState.result !== null) return null;
 
-    if (!CanMovePiece(fromPos.row, fromPos.col, toPos.row, toPos.col, gameState)) {
+    if (!canMovePiece(fromPos.row, fromPos.col, toPos.row, toPos.col, gameState)) {
         return null;
     }
 
     const movingColor = gameState.turn;
-    const nextTurn = GetOppositeColor(movingColor);
-    const nextBoard = ApplyMoveToBoard(
+    const nextTurn = getOppositeColor(movingColor);
+    const nextBoard = applyMoveToBoard(
         gameState.board,
         fromPos.row,
         fromPos.col,
         toPos.row,
-        toPos.col
+        toPos.col,
     );
 
     return {
@@ -34,155 +78,107 @@ export function TryApplyMove(
     };
 }
 
-export function CanMovePiece(
+/**
+ * Full legality check including King safety.
+ */
+export function canMovePiece(
     fromRow: number,
     fromCol: number,
     toRow: number,
     toCol: number,
     gameState: GameState,
 ): boolean {
-    const piece = gameState.board[fromRow][fromCol];
-    if (piece === null) {
+    const piece = getPiece(gameState.board, fromRow, fromCol);
+
+    if (!piece || piece.color !== gameState.turn) return false;
+
+    if (!canMovePiecePseudoLegal(fromRow, fromCol, toRow, toCol, gameState)) {
         return false;
     }
 
-    if (piece.color !== gameState.turn) {
-        return false;
-    }
-
-    if (!CanMovePiecePseudoLegal(fromRow, fromCol, toRow, toCol, gameState)) {
-        return false;
-    }
-
-    const nextBoard = ApplyMoveToBoard(
+    const nextBoard = applyMoveToBoard(
         gameState.board,
         fromRow,
         fromCol,
         toRow,
-        toCol
+        toCol,
     );
 
-    return !IsKingInCheck(nextBoard, piece.color);
+    return !isKingInCheck(nextBoard, piece.color);
 }
 
-export function HasAnyLegalMove(gameState: GameState): boolean {
-    for (let fromRow = 0; fromRow < 12; fromRow++) {
-        for (let fromCol = 0; fromCol < 12; fromCol++) {
-            const piece = gameState.board[fromRow][fromCol];
+/**
+ * Checks if the current player has any move that doesn't leave King in check.
+ */
+export function hasAnyLegalMove(gameState: GameState): boolean {
+    for (let fromRow = 0; fromRow < BOARD_SIZE; fromRow++) {
+        for (let fromCol = 0; fromCol < BOARD_SIZE; fromCol++) {
+            const piece = getPiece(gameState.board, fromRow, fromCol);
 
-            if (piece === null || piece.color !== gameState.turn) {
-                continue;
-            }
+            if (piece === null || piece.color !== gameState.turn) continue;
 
-            for (let toRow = 0; toRow < 12; toRow++) {
-                for (let toCol = 0; toCol < 12; toCol++) {
-                    if (CanMovePiece(fromRow, fromCol, toRow, toCol, gameState)) {
-                        console.log(`has legal move. Can move ${piece.kind}`)
+            for (let toRow = 0; toRow < BOARD_SIZE; toRow++) {
+                for (let toCol = 0; toCol < BOARD_SIZE; toCol++) {
+                    if (canMovePiece(fromRow, fromCol, toRow, toCol, gameState)) {
                         return true;
                     }
                 }
             }
         }
     }
-
     return false;
 }
 
-function CanMovePiecePseudoLegal(
+function canMovePiecePseudoLegal(
     fromRow: number,
     fromCol: number,
     toRow: number,
     toCol: number,
     gameState: GameState,
 ): boolean {
-    if (!IsInsideBoard(fromRow, fromCol) || !IsInsideBoard(toRow, toCol)) {
-        return false;
-    }
+    if (!isInsideBoard(fromRow, fromCol) || !isInsideBoard(toRow, toCol)) return false;
+    if (isSameSquare(fromRow, fromCol, toRow, toCol)) return false;
 
-    if (IsSameSquare(fromRow, fromCol, toRow, toCol)) {
-        return false;
-    }
+    const piece = getPiece(gameState.board, fromRow, fromCol);
+    if (!piece || isFriendlyPieceAt(gameState.board, toRow, toCol, piece.color)) return false;
 
-    const piece = gameState.board[fromRow][fromCol];
-    if (piece == null) {
-        return false;
-    }
-
-    if (IsFriendlyPiece(toRow, toCol, piece.color, gameState.board)) {
-        return false;
-    }
-    
     switch (piece.kind) {
-        case "pawn":
-            return CanMovePawn(fromRow, fromCol, toRow, toCol, gameState.board, piece.color);
-        case "rook":
-            return CanMoveRook(fromRow, fromCol, toRow, toCol, gameState.board);
-        case "oligarch":
-            return CanMoveOligarch(fromRow, fromCol, toRow, toCol, gameState.board);
-        case "knight":
-            return CanMoveKnight(fromRow, fromCol, toRow, toCol);
-        case "kangaroo":
-            return CanMoveKangaroo(fromRow, fromCol, toRow, toCol);
-        case "bishop":
-            return CanMoveBishop(fromRow, fromCol, toRow, toCol, gameState.board);
-        case "queen":
-            return CanMoveQueen(fromRow, fromCol, toRow, toCol, gameState.board);
-        case "king":
-            return CanMoveKing(fromRow, fromCol, toRow, toCol, gameState.board);
+        case PAWN_PIECE:
+            return canMovePawn(fromRow, fromCol, toRow, toCol, gameState.board, piece.color);
+        case ROOK_PIECE:
+            return canMoveRook(fromRow, fromCol, toRow, toCol, gameState.board);
+        case OLIGARCH_PIECE:
+            return canMoveOligarch(fromRow, fromCol, toRow, toCol, gameState.board);
+        case KNIGHT_PIECE:
+            return canMoveKnight(fromRow, fromCol, toRow, toCol);
+        case KANGAROO_PIECE:
+            return canMoveKangaroo(fromRow, fromCol, toRow, toCol);
+        case BISHOP_PIECE:
+            return canMoveBishop(fromRow, fromCol, toRow, toCol, gameState.board);
+        case QUEEN_PIECE:
+            return canMoveQueen(fromRow, fromCol, toRow, toCol, gameState.board);
+        case KING_PIECE:
+            return canMoveKing(fromRow, fromCol, toRow, toCol, gameState.board);
+        default:
+            return false;
     }
-
-    return false;
 }
 
-export function CanMoveKing(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    board: Board
-): boolean {
-    const piece = board[fromRow][fromCol];
-    if (piece === null) {
-        return false;
-    }
+export function canMoveKing(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+    if (!getPiece(board, fromRow, fromCol)) return false;
+    return Math.abs(toRow - fromRow) <= 1 && Math.abs(toCol - fromCol) <= 1;
+}
+
+export function canMoveQueen(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+    return canMoveRook(fromRow, fromCol, toRow, toCol, board) || canMoveBishop(fromRow, fromCol, toRow, toCol, board);
+}
+
+export function canMoveBishop(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+    if (!getPiece(board, fromRow, fromCol)) return false;
 
     const rowDiff = Math.abs(toRow - fromRow);
     const colDiff = Math.abs(toCol - fromCol);
-
-    return rowDiff <= 1 && colDiff <= 1;
-}
-
-export function CanMoveQueen(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    board: Board
-): boolean {
-    return (
-        CanMoveRook(fromRow, fromCol, toRow, toCol, board) ||
-        CanMoveBishop(fromRow, fromCol, toRow, toCol, board)
-    );
-}
-
-export function CanMoveBishop(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    board: Board
-): boolean {
-    const piece = board[fromRow][fromCol];
-    if (piece === null) {
-        return false;
-    }
-
-    const rowDiff = Math.abs(toRow - fromRow);
-    const colDiff = Math.abs(toCol - fromCol);
-
-    if (rowDiff !== colDiff) {
-        return false;
-    }
+    if (rowDiff !== colDiff) return false;
 
     const rowStep = toRow > fromRow ? 1 : -1;
     const colStep = toCol > fromCol ? 1 : -1;
@@ -191,72 +187,37 @@ export function CanMoveBishop(
     let col = fromCol + colStep;
 
     while (row !== toRow && col !== toCol) {
-        if (board[row][col] !== null) {
-            return false;
-        }
-
+        if (getPiece(board, row, col) !== null) return false;
         row += rowStep;
         col += colStep;
     }
-
     return true;
 }
 
-export function CanMoveKangaroo(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-): boolean {
+export function canMoveKangaroo(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
     const rowDiff = Math.abs(toRow - fromRow);
     const colDiff = Math.abs(toCol - fromCol);
-
-    return (
-        (rowDiff === 2 && colDiff === 0) ||
-        (rowDiff === 0 && colDiff === 2) ||
-        (rowDiff === 3 && colDiff === 0) ||
-        (rowDiff === 0 && colDiff === 3)
-    );
+    return (rowDiff === 2 && colDiff === 0) || (rowDiff === 0 && colDiff === 2) ||
+           (rowDiff === 3 && colDiff === 0) || (rowDiff === 0 && colDiff === 3);
 }
 
-export function CanMoveKnight(
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-): boolean {
+export function canMoveKnight(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
     const rowDiff = Math.abs(toRow - fromRow);
     const colDiff = Math.abs(toCol - fromCol);
-
-    return (
-        (rowDiff === 2 && colDiff === 1) ||
-        (rowDiff === 1 && colDiff === 2)
-    );
+    return (rowDiff === 2 && colDiff === 1) || (rowDiff === 1 && colDiff === 2);
 }
 
-export function CanMoveOligarch(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
-    const oligarchPiece = board[fromRow][fromCol];
+export function canMoveOligarch(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+    const piece = getPiece(board, fromRow, fromCol);
+    if (!piece) return false;
 
-    if (oligarchPiece === null) {
-        return false;
-    }
-
-    const hasFriendlyNeighbor = HasAdjacentFriendlyPiece(fromRow, fromCol, oligarchPiece.color, board);
-
-    if (hasFriendlyNeighbor) {
-        return CanMoveQueen(fromRow, fromCol, toRow, toCol, board);
-    }
-
-    return CanMoveKing(fromRow, fromCol, toRow, toCol, board);
+    return hasAdjacentFriendlyPiece(fromRow, fromCol, piece.color, board)
+        ? canMoveQueen(fromRow, fromCol, toRow, toCol, board)
+        : canMoveKing(fromRow, fromCol, toRow, toCol, board);
 }
 
-export function CanMoveRook(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
-    const isSameRow = fromRow === toRow;
-    const isSameCol = fromCol === toCol;
-
-    if (!isSameRow && !isSameCol) {
-        return false;
-    }
+export function canMoveRook(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board): boolean {
+    if (fromRow !== toRow && fromCol !== toCol) return false;
 
     const rowStep = toRow === fromRow ? 0 : (toRow > fromRow ? 1 : -1);
     const colStep = toCol === fromCol ? 0 : (toCol > fromCol ? 1 : -1);
@@ -265,125 +226,60 @@ export function CanMoveRook(fromRow: number, fromCol: number, toRow: number, toC
     let col = fromCol + colStep;
 
     while (row !== toRow || col !== toCol) {
-        if (board[row][col] !== null) {
-            // a piece is there
-            return false;
-        }
-
+        if (getPiece(board, row, col) !== null) return false;
         row += rowStep;
         col += colStep;
     }
-
     return true;
 }
 
-export function CanMovePawn(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board, color: PieceColor): boolean {
-    const direction = color === "black" ? 1 : -1;
+export function canMovePawn(fromRow: number, fromCol: number, toRow: number, toCol: number, board: Board, color: PieceColor): boolean {
+    const direction = color === PIECE_BLACK ? 1 : -1;
     const rowDiff = toRow - fromRow;
     const colDiff = toCol - fromCol;
-    const targetPiece = board[toRow][toCol];
+    const targetPiece = getPiece(board, toRow, toCol);
 
-    // Forward movement: same col only, destination must be empty
-    if (fromCol == toCol) {
-        if (rowDiff === direction && targetPiece === null) {
+    if (fromCol === toCol) {
+        if (rowDiff === direction && !targetPiece) return true;
+        if (isPieceAtStartingPosition(fromRow, fromCol, PAWN_PIECE, color) && 
+            rowDiff === 2 * direction && !targetPiece && !getPiece(board, fromRow + direction, fromCol)) {
             return true;
         }
-
-        if (
-            IsPieceAtStartingPosition(fromRow, fromCol, "pawn", color) && 
-            rowDiff === 2 * direction && 
-            targetPiece === null && 
-            board[fromRow + direction][fromCol] === null
-        ) {
-            return true;
-        }
-
         return false;
     }
 
-    // Diagonal capture: exactly one col sideways, one row forward, target must be enemy
-    if (colDiff === 1 && rowDiff === direction && targetPiece !== null && targetPiece.color !== color) {
-        return true;
-    }
-
-    return false;
+    return Math.abs(colDiff) === 1 && rowDiff === direction && !!targetPiece && targetPiece.color !== color;
 }
 
-
-
-function ApplyMoveToBoard(
-    board: Board,
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-): Board {
-    const nextBoard = CloneBoard(board);
-    const piece = nextBoard[fromRow][fromCol];
-
-    nextBoard[toRow][toCol] = piece;
-    nextBoard[fromRow][fromCol] = null;
-
+function applyMoveToBoard(board: Board, fromRow: number, fromCol: number, toRow: number, toCol: number): Board {
+    const nextBoard = cloneBoard(board);
+    const piece = getPiece(nextBoard, fromRow, fromCol);
+    setPiece(nextBoard, toRow, toCol, piece);
+    setPiece(nextBoard, fromRow, fromCol, null);
     return nextBoard;
 }
 
-
-
-function HasAdjacentFriendlyPiece(
-    row: number,
-    col: number,
-    color: PieceColor,
-    board: Board
-): boolean {
-    for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
-        for (let colOffset = -1; colOffset <= 1; colOffset++) {
-            if (rowOffset === 0 && colOffset === 0) {
-                continue;
-            }
-
-            const nextRow = row + rowOffset;
-            const nextCol = col + colOffset;
-
-            if (!IsInsideBoard(nextRow, nextCol)) {
-                continue;
-            }
-
-            const neighbor = board[nextRow][nextCol];
-            if (neighbor !== null && neighbor.color === color) {
-                return true;
-            }
+function hasAdjacentFriendlyPiece(row: number, col: number, color: PieceColor, board: Board): boolean {
+    for (let rd = -1; rd <= 1; rd++) {
+        for (let cd = -1; cd <= 1; cd++) {
+            if (rd === 0 && cd === 0) continue;
+            const nr = row + rd;
+            const nc = col + cd;
+            if (isInsideBoard(nr, nc) && isFriendlyPieceAt(board, nr, nc, color)) return true;
         }
     }
-
     return false;
 }
 
-function IsPieceAtStartingPosition(
-    row: number,
-    col: number,
-    pieceKind: PieceKind,
-    pieceColor: PieceColor,
-): boolean {
-    if (pieceKind === "pawn") {
-        return pieceColor === "black" ? row === 1 : row === 10;
-    }
+function isPieceAtStartingPosition(row: number, col: number, kind: PieceKind, color: PieceColor): boolean {
+    if (kind === PAWN_PIECE) return color === PIECE_BLACK ? row === 1 : row === 10;
+    
+    const backRow = color === PIECE_BLACK ? 0 : 11;
+    if (row !== backRow) return false;
 
-    const backRow = pieceColor === "black" ? 0 : 11;
-
-    if (row !== backRow) {
-        return false;
-    }
-
-    const startingColumnsByPiece: Record<Exclude<PieceKind, "pawn">, number[]> = {
-        rook: [0, 11],
-        oligarch: [1, 10],
-        knight: [2, 9],
-        kangaroo: [3, 8],
-        bishop: [4, 7],
-        queen: [5],
-        king: [6],
+    const map: Record<number, number[]> = {
+        [ROOK_PIECE]: [0, 11], [OLIGARCH_PIECE]: [1, 10], [KNIGHT_PIECE]: [2, 9],
+        [KANGAROO_PIECE]: [3, 8], [BISHOP_PIECE]: [4, 7], [KING_PIECE]: [6], [QUEEN_PIECE]: [5]
     };
-
-    return startingColumnsByPiece[pieceKind].includes(col);
+    return map[kind]?.includes(col) ?? false;
 }
-

@@ -40,13 +40,6 @@ func (ce *ChessEngine) ValidateAndMove(gameState *chess.GameState, requesteeColo
 		}
 	}
 
-	if piece.Color != requesteeColor {
-		return ValidationResponse{
-			Type:    FailureResponse,
-			Message: "cannot move oponent's piece",
-		}
-	}
-
 	canMove, feedback := ce.arbiter.CanMovePiece(gameState.Board, *piece, fromPos, toPos)
 	if !canMove {
 		return ValidationResponse{

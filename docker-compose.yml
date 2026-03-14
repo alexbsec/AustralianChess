@@ -46,23 +46,22 @@ services:
     networks:
       - app-network
 
-#
-#  frontend:
-#    build:
-#      context: ./frontend
-#      dockerfile: Dockerfile
-#    container_name: app-frontend
-#    ports:
-#      - "5173:5173"
-#    volumes:
-#      - ./frontend:/app
-#      - /app/node_modules
-#    working_dir: /app
-#    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
-#    depends_on:
-#      - backend
-#    networks:
-#      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: app-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    depends_on:
+      - backend
+    networks:
+      - app-network
 
 networks:
   app-network:

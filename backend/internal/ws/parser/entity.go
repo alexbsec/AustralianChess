@@ -8,7 +8,7 @@ type Envelope struct {
 
 type MovePieceMessage struct {
 	Type           string           `json:"type"`
-	RequesteeColor chess.PieceColor `json:"requesteeColor"`
-	FromPos        chess.Position   `json:"fromPos"`
-	ToPos          chess.Position   `json:"toPos"`
+	RequesteeColor chess.PieceColor `json:"requestee_color"`
+	FromPos        chess.Position   `json:"from_pos"`
+	ToPos          chess.Position   `json:"to_pos"`
 }

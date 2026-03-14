@@ -1,23 +1,36 @@
 import type { Board, GameState, Piece, PieceColor, Position } from "./types";
+import { BOARD_SIZE } from "./constants";
 
-export function ArePositionsEqual(
+/**
+ * Checks if two positions refer to the same coordinates.
+ */
+export function arePositionsEqual(
     a: Position | null,
     b: Position | null
 ): boolean {
-    if (a === null || b === null) {
-        return false;
-    }
-
+    if (a === null || b === null) return false;
     return a.row === b.row && a.col === b.col;
 }
 
-export function CloneBoard(board: Board): Board {
-    return board.map((row) => row.map((square) => square));
+/**
+ * Creates a deep copy of the board data.
+ */
+export function cloneBoard(board: Board): Board {
+    return {
+        data: board.data.map((row) =>
+            row.map((square) => ({
+                color: square.color,
+                piece: square.piece ? { ...square.piece } : null,
+            })),
+        ),
+    };
 }
 
-export function GetPositionFromSquare(square: HTMLElement): Position | null {
-    const row = square.dataset.row;
-    const col = square.dataset.col;
+/**
+ * Extracts row and col from DOM dataset.
+ */
+export function getPositionFromSquare(square: HTMLElement): Position | null {
+    const { row, col } = square.dataset;
 
     if (row === undefined || col === undefined) {
         return null;
@@ -29,27 +42,45 @@ export function GetPositionFromSquare(square: HTMLElement): Position | null {
     };
 }
 
-export function IsPieceSelectable(
+/**
+ * Determines if a piece belongs to the player whose turn it currently is.
+ */
+export function isPieceSelectable(
     piece: Piece | null,
     gameState: GameState
 ): boolean {
-    if (piece === null) {
-        return false;
-    }
-
+    if (!piece) return false;
     return piece.color === gameState.turn;
 }
 
-export function IsInsideBoard(row: number, col: number): boolean {
-    return row >= 0 && row < 12 && col >= 0 && col < 12;
+/**
+ * Safety check to ensure coordinates are within the board boundaries.
+ */
+export function isInsideBoard(row: number, col: number): boolean {
+    return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
 }
 
-export function IsSameSquare(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
-    return fromRow == toRow && fromCol == toCol;
+/**
+ * Checks if two sets of coordinates are the same.
+ */
+export function isSameSquare(
+    fromRow: number,
+    fromCol: number,
+    toRow: number,
+    toCol: number
+): boolean {
+    return fromRow === toRow && fromCol === toCol;
 }
 
-export function IsFriendlyPiece(row: number, col: number, color: PieceColor, board: Board): boolean {
-    const target = board[row][col];
-    return target !== null && target.color === color;
+/**
+ * Checks if the piece at the target location belongs to the specified color.
+ */
+export function isFriendlyPiece(
+    row: number,
+    col: number,
+    color: PieceColor,
+    board: Board
+): boolean {
+    const targetPiece = board.data[row]?.[col]?.piece;
+    return !!targetPiece && targetPiece.color === color;
 }
-
