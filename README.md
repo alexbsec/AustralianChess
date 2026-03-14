@@ -61,5 +61,4 @@ docker ps
 | :-------------- | :------------------------------------ | :---------- |
 | **Frontend UI** | [http://localhost](http://localhost)  | `80`        |
 | **Backend API** | [http://localhost:8080/api/v1](http://localhost:8080/api/v1) | `8080`      |
-| **WebSockets** | `ws://localhost:8080/ws`              | `8080`      |
 | **Database** | `localhost:5432`                      | `5432`      |
