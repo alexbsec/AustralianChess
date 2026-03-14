@@ -24,22 +24,31 @@ A multiplayer, real-time strategy chess variant played on an expanded **12x12 bo
     ├── src/engine/        # Shared game rules (ported to TS)
     ├── src/room/          # Room & Socket controllers
     └── public/pieces/     # Asset inventory
+```
 
 # Setup & Installation
 ## 1. Configure Environment Variables
 ### Copy the sample file to both the root and backend directories
+```bash
 cp .env.sample .env
 cp .env.sample backend/.env
+```
 
 ## 2. Clean Start with Docker
 ### This ensures any previous zombie containers or failed builds are cleared
+```bash
 docker-compose down --remove-orphans
+```
 
 ## 3. Build and Launch
 ### Use --no-cache to ensure the 'npm not found' error is fully resolved
+```bash
 docker-compose build --no-cache
 docker-compose up -d
+```
 
 ## 4. Verify Services
 ### Check that all three containers (db, backend, frontend) are 'Up'
+```bash
 docker ps
+```
