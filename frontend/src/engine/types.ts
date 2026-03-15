@@ -1,7 +1,6 @@
 export type PieceColor = 0 | 1;
 export type PieceKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-
 export type Position = {
     row: number;
     col: number;
@@ -24,9 +23,9 @@ export type Board = {
 export type GameState = {
     board: Board;
     turn: PieceColor;
-    result: unknown | null;
-    endReason?: string | null;
+    result: number | null;
     end_reason?: string | null;
+    in_check: boolean;
 };
 
 export type PieceSide = "white" | "black";

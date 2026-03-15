@@ -4,4 +4,5 @@ export type UIState = {
     selected: Position | null;
     possibleMoves: Position[];
     isMouseDown: boolean;
+    draggingPos: Position | null;
 };

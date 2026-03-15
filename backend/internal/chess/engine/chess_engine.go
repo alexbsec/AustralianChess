@@ -16,6 +16,24 @@ func NewChessEngine() *ChessEngine {
 	}
 }
 
+func (ce *ChessEngine) GameResult(gameState *chess.GameState, turnColor chess.PieceColor) *chess.GameResult {
+	if gameState == nil {
+		return nil
+	}
+
+	if ce.arbiter.IsCheckmate(gameState.Board, turnColor) {
+		result := chess.ResultCheckmate
+		return &result
+	}
+
+	if ce.arbiter.IsStalemate(gameState.Board, turnColor) {
+		result := chess.ResultStalemate
+		return &result
+	}
+
+	return nil
+}
+
 func (ce *ChessEngine) ValidateAndMove(gameState *chess.GameState, requesteeColor chess.PieceColor, fromPos chess.Position, toPos chess.Position) ValidationResponse {
 	if gameState == nil {
 		return ValidationResponse{
@@ -54,6 +72,13 @@ func (ce *ChessEngine) ValidateAndMove(gameState *chess.GameState, requesteeColo
 			Type:    ErrorResponse,
 			Message: "cannot move on empty square",
 		}
+	}
+
+	opponentColor := chess.OponentColor(requesteeColor)
+	if ce.arbiter.IsInCheck(gameState.Board, opponentColor) {
+		gameState.InCheck = true
+	} else {
+		gameState.InCheck = false
 	}
 
 	switchTurn(gameState)

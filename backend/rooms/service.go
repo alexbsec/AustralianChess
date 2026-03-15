@@ -35,10 +35,10 @@ func (s *Service) CreateRoom(ctx context.Context) (CreateRoomResponse, error) {
 
 	room := &Room{
 		Id:          uuid.New().String(),
-		GameState:   gameState,
 		GameStarted: false,
 		PlayerCount: 0,
 		CreatedAt:   time.Now(),
+		GameState:   gameState,
 	}
 
 	s.mtx.Lock()
@@ -153,6 +153,19 @@ func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd parser.
 	}
 
 	result.Moved = true
+	nextTurn := chess.OponentColor(cmd.RequesteeColor)
+	room.GameState.Result = s.chessEngine.GameResult(room.GameState, nextTurn)
+	endReason := ""
+	if room.GameState.Result != nil && *room.GameState.Result == chess.ResultCheckmate {
+		endReason = fmt.Sprintf("%s wins by checkmate", chess.PieceColorString(cmd.RequesteeColor))
+	} else if room.GameState.Result != nil && *room.GameState.Result == chess.ResultStalemate {
+		endReason = "game drawn by stalemate"
+	}
+
+	if endReason != "" {
+		room.GameState.EndReason = &endReason
+	}
+
 	result.GameState = *room.GameState
 	log.Printf("piece moved: %v", engineResult.Message)
 	return result, nil

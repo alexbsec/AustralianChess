@@ -19,6 +19,7 @@ export class RoomState {
         selected: null,
         possibleMoves: [],
         isMouseDown: false,
+        draggingPos: null,
     };
 
     /**

@@ -12,7 +12,10 @@ var successMoveResFmt string = "piece %d movement accepted from %v to %v"
 var failureMoveResFmt string = "piece %d cannot move from %v to %v"
 var captureMoveResFmt string = "piece %d capture piece %d on movement from %v to %v"
 
-type ChessArbitrator struct{}
+type ChessArbitrator struct {
+	blackPiecesPositions []chess.PiecePosition
+	whitePiecesPositions []chess.PiecePosition
+}
 
 func NewChessArbitrator() *ChessArbitrator {
 	return &ChessArbitrator{}
@@ -29,7 +32,6 @@ func (ca *ChessArbitrator) CanMovePiece(board chess.Board, piece chess.Piece, fr
 
 	var canMove bool
 	var feedback string
-
 	switch piece.Kind {
 	case chess.PawnPiece:
 		canMove, feedback = canMovePawn(board, piece, fromPos, toPos)
@@ -66,6 +68,92 @@ func (ca *ChessArbitrator) CanMovePiece(board chess.Board, piece chess.Piece, fr
 	}
 
 	return true, feedback
+}
+
+func (ca ChessArbitrator) IsInCheck(board chess.Board, turnColor chess.PieceColor) bool {
+	isCheck, _ := isKingInCheck(board, turnColor)
+	return isCheck
+}
+
+func (ca *ChessArbitrator) IsCheckmate(board chess.Board, turnColor chess.PieceColor) bool {
+	legalMoves := ca.getLegalMovesForColor(board, turnColor)
+	isKingInCheck, _ := isKingInCheck(board, turnColor)
+
+	if len(legalMoves) == 0 && isKingInCheck {
+		return true
+	}
+
+	return false
+}
+
+func (ca *ChessArbitrator) IsStalemate(board chess.Board, turnColor chess.PieceColor) bool {
+	legalMoves := ca.getLegalMovesForColor(board, turnColor)
+	isKingInCheck, _ := isKingInCheck(board, turnColor)
+
+	if len(legalMoves) == 0 && !isKingInCheck {
+		return true
+	}
+
+	return false
+}
+
+func (ca *ChessArbitrator) getLegalMovesForColor(board chess.Board, color chess.PieceColor) []chess.Move {
+	ca.useBoard(board)
+	switch color {
+	case chess.PieceBlack:
+		return ca.legalMovesForPieces(board, ca.blackPiecesPositions)
+	case chess.PieceWhite:
+		return ca.legalMovesForPieces(board, ca.whitePiecesPositions)
+	}
+
+	return make([]chess.Move, 0)
+}
+
+func (ca *ChessArbitrator) legalMovesForPieces(board chess.Board, piecePosition []chess.PiecePosition) []chess.Move {
+	rows, cols := board.Dimensions()
+
+	var legalMoves []chess.Move
+	for _, piecePos := range piecePosition {
+		for row := range rows {
+			for col := range cols {
+				toPos := chess.Position{Row: row, Col: col}
+				canMove, _ := ca.CanMovePiece(board, piecePos.Piece, piecePos.Position, toPos)
+				if canMove {
+					legalMoves = append(legalMoves, chess.Move{FromPos: piecePos.Position, ToPos: toPos})
+				}
+			}
+		}
+	}
+
+	return legalMoves
+}
+
+func (ca *ChessArbitrator) useBoard(board chess.Board) {
+	// clear arrays
+	ca.blackPiecesPositions = ca.blackPiecesPositions[:0]
+	ca.whitePiecesPositions = ca.whitePiecesPositions[:0]
+
+	rows, cols := board.Dimensions()
+	for row := range rows {
+		for col := range cols {
+			position := chess.Position{Row: row, Col: col}
+			piece := board.GetPiece(position)
+			if piece == nil {
+				continue
+			}
+
+			piecePosition := chess.PiecePosition{
+				Piece:    *piece,
+				Position: position,
+			}
+
+			if piece.Color == chess.PieceBlack {
+				ca.blackPiecesPositions = append(ca.blackPiecesPositions, piecePosition)
+			} else {
+				ca.whitePiecesPositions = append(ca.whitePiecesPositions, piecePosition)
+			}
+		}
+	}
 }
 
 func canMoveOligarch(board chess.Board, piece chess.Piece, fromPos, toPos chess.Position) (bool, string) {
@@ -354,62 +442,36 @@ func isKingInCheck(board chess.Board, pieceColor chess.PieceColor) (bool, string
 }
 
 func isSquareAttacked(board chess.Board, squarePosition chess.Position, color chess.PieceColor) bool {
-	rows, cols := board.Dimensions()
-	for row := range rows {
-		for col := range cols {
-			piecePos := chess.Position{Row: row, Col: col}
-			piece := board.GetPiece(piecePos)
-			if piece == nil || piece.Color != color {
-				continue
-			}
-
-			if canPieceAttackSquare(board, *piece, piecePos, squarePosition) {
-				return true
-			}
-		}
+	if attackedBySlider(board, squarePosition, color) {
+		return true
 	}
 
-	return false
-}
-
-func canPieceAttackSquare(board chess.Board, piece chess.Piece, piecePos, squarePos chess.Position) bool {
-	if !isInsideBoard(board, piecePos, squarePos) {
-		return false
+	knightMoves := []chess.Position{
+		{Row: 2, Col: 1}, {Row: 2, Col: -1}, {Row: -2, Col: 1}, {Row: -2, Col: -1},
+		{Row: 1, Col: 2}, {Row: 1, Col: -2}, {Row: -1, Col: 2}, {Row: -1, Col: -2},
+	}
+	if attackedByStepper(board, squarePosition, color, knightMoves, chess.KnightPiece) {
+		return true
 	}
 
-	if isSameSquare(piecePos, squarePos) {
-		return false
+	kangarooMoves := []chess.Position{
+		{Row: 2, Col: 0}, {Row: -2, Col: 0}, {Row: 0, Col: 2}, {Row: 0, Col: -2},
+		{Row: 3, Col: 0}, {Row: -3, Col: 0}, {Row: 0, Col: 3}, {Row: 0, Col: -3},
+	}
+	if attackedByStepper(board, squarePosition, color, kangarooMoves, chess.KangarooPiece) {
+		return true
 	}
 
-	canMove := false
-	switch piece.Kind {
-	case chess.PawnPiece:
-		direction := -1
-		if piece.Color == chess.PieceBlack {
-			direction = 1
-		}
-		rowDiff := squarePos.Row - piecePos.Row
-		colDiff := squarePos.Col - piecePos.Col
-		canMove = rowDiff == direction && intAbs(colDiff) == 1
-	case chess.RookPiece:
-		canMove, _ = canMoveRook(board, piece, piecePos, squarePos)
-	case chess.KnightPiece:
-		canMove, _ = canMoveKnight(board, piece, piecePos, squarePos)
-	case chess.BishopPiece:
-		canMove, _ = canMoveBishop(board, piece, piecePos, squarePos)
-	case chess.KangarooPiece:
-		canMove, _ = canMoveKangaroo(board, piece, piecePos, squarePos)
-	case chess.OligarchPiece:
-		canMove, _ = canMoveOligarch(board, piece, piecePos, squarePos)
-	case chess.QueenPiece:
-		canMove, _ = canMoveQueen(board, piece, piecePos, squarePos)
-	case chess.KingPiece:
-		canMove, _ = canMoveKing(board, piece, piecePos, squarePos)
-	default:
-		break
+	pawnDir := 1
+	if color == chess.PieceWhite {
+		pawnDir = -1
 	}
 
-	return canMove
+	pawnAttacks := []chess.Position{
+		{Row: -pawnDir, Col: 1},
+		{Row: -pawnDir, Col: -1},
+	}
+	return attackedByStepper(board, squarePosition, color, pawnAttacks, chess.PawnPiece)
 }
 
 func findKingPosition(board chess.Board, pieceColor chess.PieceColor) *chess.Position {
@@ -450,6 +512,101 @@ func hasAdjacentFriendlyPiece(board chess.Board, color chess.PieceColor, positio
 	}
 
 	return false
+}
+
+func attackedByStepper(board chess.Board, piecePos chess.Position, attackerColor chess.PieceColor, offsets []chess.Position, kind chess.PieceKind) bool {
+	for _, offset := range offsets {
+		checkPos := chess.Position{Row: piecePos.Row + offset.Row, Col: piecePos.Col + offset.Col}
+
+		if !isInsideBoard(board, piecePos, checkPos) {
+			continue
+		}
+
+		piece := board.GetPiece(checkPos)
+
+		if piece != nil && piece.Color == attackerColor && piece.Kind == kind {
+			return true
+		}
+	}
+
+	return false
+}
+
+func attackedBySlider(board chess.Board, piecePos chess.Position, attackerColor chess.PieceColor) bool {
+	directions := []struct {
+		dr, dc   int
+		diagonal bool
+	}{
+		{1, 0, false}, {-1, 0, false}, {0, 1, false}, {0, -1, false}, // orthogonal
+		{1, 1, true}, {1, -1, true}, {-1, 1, true}, {-1, -1, true}, // diagonal
+	}
+
+	for _, dir := range directions {
+
+		for i := 1; ; i++ {
+
+			currPos := chess.Position{
+				Row: piecePos.Row + dir.dr*i,
+				Col: piecePos.Col + dir.dc*i,
+			}
+
+			if !isInsideBoard(board, piecePos, currPos) {
+				break
+			}
+
+			piece := board.GetPiece(currPos)
+
+			if piece == nil {
+				continue
+			}
+
+			// friendly piece blocks ray
+			if piece.Color != attackerColor {
+				break
+			}
+
+			if isPieceASlider(board, *piece, piecePos, currPos, dir.diagonal) {
+				return true
+			}
+
+			break
+		}
+	}
+
+	return false
+}
+
+func isPieceASlider(
+	board chess.Board,
+	piece chess.Piece,
+	targetPiecePos chess.Position,
+	position chess.Position,
+	isDiagonal bool,
+) bool {
+	switch piece.Kind {
+	case chess.QueenPiece:
+		return true
+	case chess.RookPiece:
+		return !isDiagonal
+	case chess.BishopPiece:
+		return isDiagonal
+	case chess.OligarchPiece:
+		xDiff, yDiff := distance(targetPiecePos, position)
+		// adjacent oligarch behaves like king
+		if xDiff <= 1 && yDiff <= 1 {
+			return true
+		}
+		// otherwise it becomes a slider only if activated
+		return hasAdjacentFriendlyPiece(board, piece.Color, position)
+	default:
+		return false
+	}
+}
+
+func distance(pos1, pos2 chess.Position) (int, int) {
+	rowDiff := intAbs(pos1.Row - pos2.Row)
+	colDiff := intAbs(pos1.Col - pos2.Col)
+	return rowDiff, colDiff
 }
 
 func applyMoveToBoard(board chess.Board, fromPos, toPos chess.Position) (chess.Board, error) {

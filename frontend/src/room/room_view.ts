@@ -76,6 +76,40 @@ export class RoomView {
         `;
     }
 
+    public showGameOverModal(reason: string, onNewGame: () => void): void {
+        if (document.getElementById("game-over-modal")) return;
+
+        const modalOverlay = document.createElement("div");
+        modalOverlay.id = "game-over-modal";
+        modalOverlay.className = "modal-overlay"; 
+        
+        modalOverlay.style.zIndex = "99999"; 
+        modalOverlay.removeAttribute('hidden');
+        modalOverlay.style.display = 'flex';
+
+        modalOverlay.innerHTML = `
+            <div class="modal-content" style="position: relative; z-index: 100000;">
+                <h2 style="margin-top: 0; color: var(--primary);">Game Over</h2>
+                <p style="margin-bottom: 24px; color: var(--text);">${reason}</p>
+                <div class="modal-actions">
+                    <button id="modal-new-room-btn" class="btn btn-primary">Create New Room</button>
+                    <button id="modal-close-btn" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modalOverlay);
+
+        document.getElementById("modal-new-room-btn")?.addEventListener("click", () => {
+            modalOverlay.remove();
+            onNewGame();
+        });
+
+        document.getElementById("modal-close-btn")?.addEventListener("click", () => {
+            modalOverlay.remove();
+        });
+    }
+
     /**
      * Completely re-renders the board squares based on UI and Game state.
      */
@@ -118,14 +152,18 @@ export class RoomView {
         }
 
         if (squareData?.piece) {
-            const name = pieceKindToName(squareData.piece.kind);
-            const side = pieceColorToSide(squareData.piece.color);
-            
-            const img = document.createElement("img");
-            img.className = "room-piece";
-            img.src = PIECE_ASSETS[side][name];
-            img.draggable = false;
-            square.appendChild(img);
+            const isBeingDragged = uiState.draggingPos && positionsEqual(uiState.draggingPos, boardPos);
+
+            if (!isBeingDragged) {
+                const name = pieceKindToName(squareData.piece.kind);
+                const side = pieceColorToSide(squareData.piece.color);
+                
+                const img = document.createElement("img");
+                img.className = "room-piece";
+                img.src = PIECE_ASSETS[side][name];
+                img.draggable = false;
+                square.appendChild(img);
+            }
         }
 
         return square;
