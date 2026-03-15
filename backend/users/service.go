@@ -90,6 +90,10 @@ func (s *Service) NewUser(ctx context.Context, playerId, password string) (*NewU
 	return response, nil
 }
 
+func (s *Service) User(ctx context.Context, userId int64) (*User, error) {
+	return s.repo.FetchUser(ctx, userId)
+}
+
 func hashPassword(password string) (string, error) {
 	hashPwd, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

@@ -80,6 +80,18 @@ func (s *Service) FetchRoom(ctx context.Context, roomId string) (*Room, error) {
 	return room, nil
 }
 
+func (s *Service) DeleteRoom(ctx context.Context, roomId string) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	if _, ok := s.rooms[roomId]; !ok {
+		return errors.New("invalid room id")
+	}
+
+	delete(s.rooms, roomId)
+	return nil
+}
+
 func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parser.Result, error) {
 	if cmd == nil {
 		return nil, errors.New("cannot execute nil command")

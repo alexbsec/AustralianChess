@@ -79,3 +79,21 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userId int64) error {
 	_, err := pool.Exec(ctx, query, userId)
 	return err
 }
+
+func (r *UserRepository) FetchUser(ctx context.Context, userId int64) (*users.User, error) {
+	query := `
+	SELECT id, player_id, password_hash, created_at, updated_at
+	FROM users
+	WHERE id = $1
+	`
+
+	pool := r.database.Pool()
+	row := pool.QueryRow(ctx, query, userId)
+	var user users.User
+	err := row.Scan(&user.Id, &user.PlayerId, &user.PasswordHash, &user.CreatedAt, &user.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil	
+}

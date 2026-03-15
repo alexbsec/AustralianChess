@@ -11,6 +11,7 @@ type IService interface {
 	CreateRoom(ctx context.Context) (CreateRoomResponse, error)
 	DisplayRoom(ctx context.Context, roomId string) (DisplayRoomResponse, error)
 	FetchRoom(ctx context.Context, roomId string) (*Room, error)
+	DeleteRoom(ctx context.Context, roomId string) error
 
 	ExecuteCommand(ctx context.Context, cmd parser.Command) (parser.Result, error)
 	UpdatePlayerJoined(ctx context.Context, roomId, playerId string, color chess.PieceColor) (parser.Result, error)

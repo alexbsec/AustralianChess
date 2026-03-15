@@ -1,4 +1,4 @@
-import { clearAuthSession, getPlayerId, isAuthenticated } from "../auth";
+import { clearAuthSession, getPlayerId, isAuthenticated, authFetch } from "../auth";
 import { navigateTo } from "../router";
 
 function createButton(
@@ -26,9 +26,10 @@ function createButton(
 }
 
 export async function createRoom(_playerId: string): Promise<void> {
-    const response = await fetch("/api/v1/room/create", {
+    const response = await authFetch("/api/v1/room/create", {
         method: "GET",
     });
+  
 
     if (!response.ok) {
         throw new Error("Failed to create room");

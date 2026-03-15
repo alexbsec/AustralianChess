@@ -15,13 +15,16 @@ func RoomHandler(
 	roomService rooms.IService,
 	wsHandler *ws.Handler,
 ) {
-	routerGroup.Handle("GET", "/room/create", MakeNewRoom(roomService))
-	routerGroup.Handle("GET", "/room/:id", ServeRoom(roomService))
-	routerGroup.Handle("GET", "/ws/room/:id", wsHandler.HandleRoom)
+	routerGroup.Handle("GET", "/create", MakeNewRoom(roomService))
+	routerGroup.Handle("GET", "/:id", ServeRoom(roomService))
+	routerGroup.Handle("GET", "/ws/:id", wsHandler.HandleRoom)
 }
 
 func MakeNewRoom(roomService rooms.IService) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		_ = ctx.MustGet("sessionId").(int64)
+		_ = ctx.MustGet("userId").(int64)
+
 		res, err := roomService.CreateRoom(ctx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create room"})
@@ -34,6 +37,9 @@ func MakeNewRoom(roomService rooms.IService) gin.HandlerFunc {
 
 func ServeRoom(roomService rooms.IService) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		_ = ctx.MustGet("sessionId").(int64)
+		_ = ctx.MustGet("userId").(int64)
+
 		id := ctx.Param("id")
 		res, err := roomService.DisplayRoom(ctx, id)
 		if err != nil {

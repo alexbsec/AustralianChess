@@ -23,12 +23,12 @@ export class RoomController {
     private draggedElement: HTMLElement | null = null;
     private audioUnlocked: boolean = false;
 
-    constructor(container: HTMLDivElement, roomId: string, playerId: string) {
+    constructor(container: HTMLDivElement, roomId: string) {
         this.state = new RoomState();
         this.view = new RoomView(container);
         this.view.updateRoomId(roomId);
 
-        this.socket = new RoomSocket(roomId, playerId, {
+        this.socket = new RoomSocket(roomId, {
             onGameState: (state, color) => this.handleGameState(state, color),
             onRoomStatus: (success, started) => this.handleRoomStatus(success, started),
             onMoveResult: (moved, state) => {
