@@ -7,7 +7,7 @@ export default defineConfig({
                 target: "http://localhost:8080",
                 changeOrigin: true,
             },
-            "/api/v1/ws": {
+            "/api/v1/room/ws": {
                 target: "ws://localhost:8080",
                 ws: true,
                 changeOrigin: true,

@@ -3,6 +3,7 @@ package gin
 import (
 	"context"
 
+	"github.com/alexbsec/AustralianChess/backend/internal/auth"
 	"github.com/alexbsec/AustralianChess/backend/internal/ws"
 	"github.com/alexbsec/AustralianChess/backend/rooms"
 	"github.com/alexbsec/AustralianChess/backend/users"
@@ -14,19 +15,22 @@ func MakeHandlers(
 	roomService rooms.IService,
 	userService users.IService,
 	wsHandler *ws.Handler,
+	authorizer auth.IAuthorizer,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 
-	routerGroup := router.Group("/api/v1")
-	routerGroup.Use(gin.Logger())
+	authRouter := router.Group("/api/v1/room")
+	generalRouterGroup := router.Group("/api/v1")
+	authRouter.Use(AuthMiddleware(authorizer))
+	generalRouterGroup.Use(gin.Logger())
 
 	if roomService != nil {
-		RoomHandler(ctx, routerGroup, roomService, wsHandler)
+		RoomHandler(ctx, authRouter, roomService, wsHandler)
 	}
 
 	if userService != nil {
-		UserHandler(ctx, routerGroup, userService)
+		UserHandler(ctx, generalRouterGroup, userService)
 	}
 
 	return router

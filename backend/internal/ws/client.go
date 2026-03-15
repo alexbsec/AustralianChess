@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 	"github.com/gorilla/websocket"
 )
@@ -25,6 +27,7 @@ type RoomClient struct {
 	PlayerOne  *Client
 	PlayerTwo  *Client
 	Spectators map[*websocket.Conn]*Client
+	LastActive time.Time
 }
 
 func NewRoomClient() *RoomClient {

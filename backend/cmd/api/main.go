@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/alexbsec/AustralianChess/backend/internal/auth"
 	"github.com/alexbsec/AustralianChess/backend/internal/config"
 	"github.com/alexbsec/AustralianChess/backend/internal/db"
 	"github.com/alexbsec/AustralianChess/backend/internal/db/repositories"
@@ -32,10 +33,10 @@ func main() {
 
 	roomSvc := rooms.NewService()
 	hub := ws.NewHub()
-	wsHandler := ws.NewHandler(roomSvc, hub)
+	wsHandler := ws.NewHandler(roomSvc, userSvc, hub)
+	authorizer := auth.NewAuthorizer(sessionSvc)
 
-	router := ginChess.MakeHandlers(ctx, roomSvc, userSvc, wsHandler)
-
+	router := ginChess.MakeHandlers(ctx, roomSvc, userSvc, wsHandler, authorizer)
 	if err := router.Run(":8080"); err != nil {
 		log.Fatal(err)
 	}

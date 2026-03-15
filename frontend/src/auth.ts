@@ -44,3 +44,19 @@ export function getAuthHeader(): Record<string, string> {
         Authorization: `Bearer ${token}`,
     };
 }
+
+
+export async function authFetch(
+    url: string,
+    options: RequestInit = {}
+): Promise<Response> {
+    const token = getAccessToken();
+
+    return fetch(url, {
+        ...options,
+        headers: {
+            ...(options.headers || {}),
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}

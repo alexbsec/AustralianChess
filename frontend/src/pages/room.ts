@@ -35,5 +35,5 @@ export function renderRoomPage(container: HTMLDivElement): void {
     }
 
     // The Controller takes over and handles the view, socket, and state.
-    new RoomController(container, roomId, playerId);
+    new RoomController(container, roomId);
 }

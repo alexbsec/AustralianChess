@@ -1,4 +1,5 @@
 import type { WsMessage, GameStateMessage, RoomStatusMessage, MoveResultMessage } from "./types";
+import { getAccessToken } from "../auth";
 
 export function isGameStateMessage(message: WsMessage): message is GameStateMessage {
     return "type" in message && message.type === "game_state";
@@ -12,12 +13,11 @@ export function isMoveResultMessage(message: WsMessage): message is MoveResultMe
     return "moved" in message && "game_state" in message && "room_id" in message;
 }
 
-export function buildRoomWsUrl(roomId: string, playerId: string): string {
+export function buildRoomWsUrl(roomId: string): string {
+    const token = getAccessToken();
     const url = new URL(
-        `${getWsProtocol()}//${window.location.host}/api/v1/ws/room/${encodeURIComponent(roomId)}`,
+        `${getWsProtocol()}//${window.location.host}/api/v1/room/ws/${encodeURIComponent(roomId)}?token=${encodeURIComponent(token ?? "")}`,
     );
-
-    url.searchParams.set("playerId", playerId);
 
     return url.toString();
 }

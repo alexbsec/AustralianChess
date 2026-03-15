@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 	"github.com/gorilla/websocket"
@@ -12,12 +13,28 @@ import (
 type Hub struct {
 	mtx         sync.RWMutex
 	roomClients map[string]*RoomClient
+	onRoomEmpty func(roomId string)
 }
 
 func NewHub() *Hub {
 	return &Hub{
 		roomClients: make(map[string]*RoomClient),
 	}
+}
+
+func (h *Hub) StartJanitor() {
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			h.cleanupRooms()
+		}
+	}()
+}
+
+func (h *Hub) SetOnRoomEmptyCallback(callback func(roomId string)) {
+	h.onRoomEmpty = callback
 }
 
 func (h *Hub) AddClient(roomId, playerId string, conn *websocket.Conn) (*Client, error) {
@@ -86,32 +103,27 @@ func (h *Hub) AddClient(roomId, playerId string, conn *websocket.Conn) (*Client,
 
 func (h *Hub) RemoveClient(roomId string, conn *websocket.Conn) {
 	h.mtx.Lock()
-	defer h.mtx.Unlock()
 
 	room, ok := h.roomClients[roomId]
 	if !ok {
+		h.mtx.Unlock()
 		return
 	}
 
 	if room.PlayerOne != nil && room.PlayerOne.Conn == conn {
 		room.PlayerOne.Conn = nil
-		log.Printf("player one disconnected")
+		log.Printf("player one disconnected (slot kept for reconnection)")
 	}
 
 	if room.PlayerTwo != nil && room.PlayerTwo.Conn == conn {
 		room.PlayerTwo.Conn = nil
-		log.Printf("player two disconnected")
+		log.Printf("player two disconnected (slot kept for reconnection)")
 	}
 
 	delete(room.Spectators, conn)
 
-	isPlayerOneGone := room.PlayerOne == nil || room.PlayerOne.Conn == nil
-	isPlayerTwoGone := room.PlayerTwo == nil || room.PlayerTwo.Conn == nil
-
-	if isPlayerOneGone && isPlayerTwoGone && len(room.Spectators) == 0 {
-		delete(h.roomClients, roomId)
-	}
-
+	room.LastActive = time.Now()
+	h.mtx.Unlock()
 	log.Printf("client disconnected")
 }
 
@@ -147,4 +159,30 @@ func (h *Hub) Broadcast(roomId string, message any) error {
 	}
 
 	return nil
+}
+
+func (h *Hub) cleanupRooms() {
+	h.mtx.Lock()
+
+	var deleted []string
+
+	for id, room := range h.roomClients {
+		if time.Since(room.LastActive) < 5*time.Minute {
+			continue
+		}
+
+		delete(h.roomClients, id)
+		deleted = append(deleted, id)
+	}
+
+	h.mtx.Unlock()
+
+	if h.onRoomEmpty == nil {
+		return
+	}
+
+	for _, id := range deleted {
+		h.onRoomEmpty(id)
+		log.Printf("room %s cleaned up by janitor", id)
+	}
 }
