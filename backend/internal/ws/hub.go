@@ -42,7 +42,9 @@ func (h *Hub) AddClient(roomId, playerId string, conn *websocket.Conn) (*Client,
 	defer h.mtx.Unlock()
 
 	if _, ok := h.roomClients[roomId]; !ok {
-		h.roomClients[roomId] = NewRoomClient()
+		rc := NewRoomClient()
+		rc.LastActive = time.Now()
+		h.roomClients[roomId] = rc
 	}
 
 	room := h.roomClients[roomId]
@@ -129,6 +131,10 @@ func (h *Hub) RemoveClient(roomId string, conn *websocket.Conn) {
 
 func (h *Hub) Broadcast(roomId string, message any) error {
 	h.mtx.RLock()
+
+	if room, ok := h.roomClients[roomId]; ok {
+		room.LastActive = time.Now()
+	}
 
 	room, ok := h.roomClients[roomId]
 	if !ok {
