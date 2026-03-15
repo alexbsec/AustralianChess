@@ -25,7 +25,7 @@ function createButton(
     return button;
 }
 
-async function createRoom(_playerId: string): Promise<void> {
+export async function createRoom(_playerId: string): Promise<void> {
     const response = await fetch("/api/v1/room/create", {
         method: "GET",
     });

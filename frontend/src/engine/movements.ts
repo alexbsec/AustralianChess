@@ -74,7 +74,7 @@ export function tryApplyMove(
         board: nextBoard,
         turn: nextTurn,
         result: null,
-        endReason: null,
+        end_reason: null,
     };
 }
 

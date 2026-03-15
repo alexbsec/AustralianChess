@@ -7,11 +7,17 @@ const (
 	ResultStalemate
 )
 
+type Result struct {
+	Winner *PieceColor `json:"winner,omitempty"`
+	Type   GameResult  `json:"end_type"`
+}
+
 type GameState struct {
 	Board     Board       `json:"board"`
 	Turn      PieceColor  `json:"turn"`
 	Result    *GameResult `json:"result"`
-	EndReason *string     `json:"endReason"`
+	EndReason *string     `json:"end_reason"`
+	InCheck   bool        `json:"in_check"`
 }
 
 func NewGame(board Board) *GameState {
@@ -20,6 +26,7 @@ func NewGame(board Board) *GameState {
 		Turn:      PieceWhite,
 		Result:    nil,
 		EndReason: nil,
+		InCheck:   false,
 	}
 }
 

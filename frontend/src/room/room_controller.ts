@@ -9,11 +9,19 @@ import {
 } from "../engine/coords";
 import { getPseudoLegalMoves } from "../ui/ui";
 import { navigateTo } from "../router";
+import { createRoom } from "../pages/landing";
+import { getPlayerId } from "../auth";
 
 export class RoomController {
     private view: RoomView;
     private socket: RoomSocket;
     private state: RoomState;
+    private modalShown: boolean = false;
+    private moveSound: HTMLAudioElement;
+    private captureSound: HTMLAudioElement;
+    private checkSound: HTMLAudioElement;
+    private draggedElement: HTMLElement | null = null;
+    private audioUnlocked: boolean = false;
 
     constructor(container: HTMLDivElement, roomId: string, playerId: string) {
         this.state = new RoomState();
@@ -23,7 +31,12 @@ export class RoomController {
         this.socket = new RoomSocket(roomId, playerId, {
             onGameState: (state, color) => this.handleGameState(state, color),
             onRoomStatus: (success, started) => this.handleRoomStatus(success, started),
-            onMoveResult: (moved, state) => this.handleMoveResult(moved, state),
+            onMoveResult: (moved, state) => {
+                if (moved) {
+                    this.playCorrectSound(state);
+                }
+                this.handleMoveResult(moved, state);
+            },
             onOpen: () => {
                 this.view.updateStatus(
                     "Connected",
@@ -37,12 +50,30 @@ export class RoomController {
             onClose: () => this.handleClose(),
         });
 
+        this.moveSound = new Audio();
+        this.moveSound.src = "/sfx/piece_move.mp3";
+        this.moveSound.load(); // Force the browser to start downloading
+        this.moveSound.volume = 0.5;
+
+        this.captureSound = new Audio();
+        this.captureSound.src = "/sfx/piece_capture.mp3";
+        this.captureSound.load();
+        this.captureSound.volume = 0.5;
+
+        this.checkSound = new Audio();
+        this.checkSound.src = "/sfx/move_check.mp3";
+        this.checkSound.load();
+        this.checkSound.volume = 0.5;
+
         this.initEvents();
         this.socket.connect();
     }
 
     private initEvents(): void {
         this.view.boardElement.addEventListener("mousedown", (e) => this.onMouseDown(e));
+        this.view.boardElement.addEventListener("mouseup", (e) => this.onMouseUp(e));
+
+        window.addEventListener("mousemove", (e) => this.onMouseMove(e));
         this.view.boardElement.addEventListener("mouseup", (e) => this.onMouseUp(e));
 
         const backBtn = document.getElementById("back-btn");
@@ -52,7 +83,43 @@ export class RoomController {
         });
     }
 
+    private playCorrectSound(newState: GameState): void {
+        const oldState = this.state.gameState;
+        if (!oldState) return;
+
+        // 1. Check for Capture (still handled by comparing piece counts)
+        const oldPieceCount = oldState.board.data.flat().filter(sq => sq.piece !== null).length;
+        const newPieceCount = newState.board.data.flat().filter(sq => sq.piece !== null).length;
+        const isCapture = newPieceCount < oldPieceCount;
+
+        // 2. Check for "Check" (now a simple boolean check!)
+        const isCheck = newState.in_check;
+
+        // 3. Priority: Check > Capture > Normal Move
+        if (isCheck) {
+            this.playSound(this.checkSound);
+        } else if (isCapture) {
+            this.playSound(this.captureSound);
+        } else {
+            this.playSound(this.moveSound);
+        }
+    }
+
+    private playSound(audio: HTMLAudioElement): void {
+        audio.currentTime = 0;
+        audio.play().catch(err => {
+            console.warn("Audio blocked:", err);
+        });
+    }
+
     private handleGameState(state: GameState, color?: PieceColor): void {
+        const isSubsequentMove = this.state.gameState !== null;
+        const oldTurn = this.state.gameState?.turn;
+
+        if (isSubsequentMove && oldTurn !== state.turn && Number(state.turn) === Number(this.state.playerColor)) {
+            this.playCorrectSound(state);
+        }
+
         this.state.updateGameState(state, color);
 
         if (this.state.playerColor !== null) {
@@ -74,7 +141,9 @@ export class RoomController {
 
     private handleMoveResult(moved: boolean, state: GameState): void {
         this.state.updateGameState(state);
+        this.state.uiState.draggingPos = null;
         this.state.clearSelection();
+        this.state.movePending = false;
 
         if (!moved) {
             this.view.activityText.textContent = "Illegal move rejected by server.";
@@ -83,10 +152,25 @@ export class RoomController {
     }
 
     private onMouseDown(event: MouseEvent): void {
+        if (!this.audioUnlocked) {
+            [this.moveSound, this.captureSound].forEach(sound => {
+                const vol = sound.volume;
+                sound.volume = 0;
+                sound.play().then(() => {
+                    sound.pause();
+                    sound.volume = vol;
+                });
+            });
+            this.audioUnlocked = true;
+        }
+
         if (!this.state.canInteract()) return;
 
         const square = (event.target as HTMLElement).closest<HTMLDivElement>(".room-board-square");
         if (!square) return;
+
+        const pieceImg = square.querySelector<HTMLImageElement>(".room-piece");
+        if (!pieceImg) return;
 
         const boardPos = displayToBoardPosition(
             { row: Number(square.dataset.row), col: Number(square.dataset.col) },
@@ -95,25 +179,52 @@ export class RoomController {
 
         const squareData = getSquareAtPosition(this.state.gameState!, boardPos);
 
-        // Only select if it's our piece and our turn
         if (squareData?.piece?.color === this.state.playerColor && this.state.isMyTurn()) {
             this.state.uiState.selected = boardPos;
             this.state.uiState.possibleMoves = getPseudoLegalMoves(this.state.gameState!, boardPos);
+            this.state.uiState.draggingPos = boardPos;
+
+            this.draggedElement = pieceImg.cloneNode(true) as HTMLElement;
+            this.draggedElement.classList.add("dragging-piece");
+
+            Object.assign(this.draggedElement.style, {
+                position: 'fixed',
+                width: `${pieceImg.offsetWidth}px`,
+                height: `${pieceImg.offsetHeight}px`,
+                pointerEvents: 'none',
+                zIndex: '1000',
+                left: `${event.clientX - pieceImg.offsetWidth / 2}px`,
+                top: `${event.clientY - pieceImg.offsetHeight / 2}px`
+            });
+
+            document.body.appendChild(this.draggedElement);
             this.state.uiState.isMouseDown = true;
-            this.sync();
-        } else {
-            this.state.clearSelection();
             this.sync();
         }
     }
 
+    private onMouseMove(event: MouseEvent): void {
+        if (!this.draggedElement) return;
+        this.draggedElement.style.left = `${event.clientX - this.draggedElement.offsetWidth / 2}px`;
+        this.draggedElement.style.top = `${event.clientY - this.draggedElement.offsetHeight / 2}px`;
+    }
+
     private onMouseUp(event: MouseEvent): void {
-        if (!this.state.uiState.selected || this.state.movePending) return;
+        const selectedPos = this.state.uiState.selected;
+
+        if (this.draggedElement) {
+            this.draggedElement.remove();
+            this.draggedElement = null;
+        }
+
+        if (!selectedPos || this.state.movePending) {
+            this.state.uiState.isMouseDown = false;
+            return;
+        }
 
         const square = (event.target as HTMLElement).closest<HTMLDivElement>(".room-board-square");
         if (!square) {
-            this.state.clearSelection();
-            this.sync();
+            this.cancelDrag();
             return;
         }
 
@@ -122,38 +233,81 @@ export class RoomController {
             this.state.playerColor!
         );
 
-        // Clicked the same square (toggle/cancel)
-        if (positionsEqual(this.state.uiState.selected, destination)) {
-            this.state.uiState.isMouseDown = false;
+        if (positionsEqual(selectedPos, destination)) {
+            this.cancelDrag();
             return;
         }
 
         const isLegal = this.state.uiState.possibleMoves.some(m => positionsEqual(m, destination));
+
         if (isLegal) {
             this.state.movePending = true;
-            this.socket.sendMove(this.state.playerColor!, this.state.uiState.selected, destination);
+            this.socket.sendMove(this.state.playerColor!, selectedPos, destination);
             this.view.activityText.textContent = "Move accepted. Waiting for opponent's response.";
+            this.sync();
+        } else {
+            this.cancelDrag();
         }
 
-        this.state.clearSelection();
-        this.sync();
+        this.state.uiState.isMouseDown = false;
     }
 
     private sync(): void {
         if (!this.state.gameState || this.state.playerColor === null) return;
-
         this.view.renderBoard(this.state.gameState, this.state.playerColor, this.state.uiState);
         this.updateStatusDisplays();
     }
 
+    private cancelDrag(): void {
+        this.state.uiState.draggingPos = null;
+        this.state.clearSelection();
+        this.state.uiState.isMouseDown = false;
+        this.sync();
+    }
+
     private updateStatusDisplays(): void {
-        const { gameState, movePending } = this.state;
+        const { gameState, movePending, gameStarted } = this.state;
+        if (!gameState) return;
+
+        const hasEnded = gameState.result !== null || gameState.end_reason !== null;
+
+        if (hasEnded && !this.modalShown) {
+            const reason = gameState.end_reason || "Match finished.";
+            console.log("firing game over modal with reason:", reason);
+            this.view.statusText.textContent = "Match finished.";
+            this.view.activityText.textContent = reason;
+            this.view.turnTitle.textContent = "Game Finished";
+            this.view.turnBanner.className = "room-turn-banner room-turn-banner--finished";
+
+            this.view.showGameOverModal(reason, async () => {
+                this.socket.disconnect();
+                try {
+                    const playerId = getPlayerId();
+                    if (playerId !== null) {
+                        await createRoom(playerId);
+                    } else {
+                        navigateTo("/");
+                    }
+                } catch (error) {
+                    navigateTo("/");
+                }
+            });
+
+            console.log("Game ended with reason:", reason);
+            this.modalShown = true;
+            return;
+        }
+
+        if (!gameStarted) {
+            this.view.turnTitle.textContent = "Awaiting for an opponent to joing the room...";
+            this.view.activityText.textContent = "Awaiting for an opponent to join the room.";
+            this.view.turnBanner.className = "room-turn-banner room-turn-banner--waiting";
+            return;
+        }
+
         const isMyTurn = this.state.isMyTurn();
 
-        if (gameState?.result) {
-            this.view.turnTitle.textContent = "Game Over";
-            this.view.turnBanner.className = "room-turn-banner room-turn-banner--finished";
-        } else if (movePending) {
+        if (movePending) {
             this.view.turnTitle.textContent = "Processing...";
             this.view.turnBanner.className = "room-turn-banner room-turn-banner--waiting";
         } else if (isMyTurn) {
@@ -162,6 +316,7 @@ export class RoomController {
             this.view.turnBanner.className = "room-turn-banner room-turn-banner--your-turn";
         } else {
             this.view.turnTitle.textContent = "Opponent is thinking...";
+            this.view.activityText.textContent = "Waiting for opponent...";
             this.view.turnBanner.className = "room-turn-banner room-turn-banner--opponent-turn";
         }
     }

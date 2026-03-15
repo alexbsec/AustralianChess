@@ -31,6 +31,19 @@ function getPiece(board: Board, row: number, col: number) {
     return board.data[row]?.[col]?.piece ?? null;
 }
 
+export function translateResult(result: number | null): string {
+    if (result === null) return "ongoing";
+
+    switch (result) {
+    case 0:
+        return "checkmate";
+    case 1:
+        return "stalemate";
+    }
+
+    return "unknown";
+}
+
 /**
  * Checks for game-over conditions and updates the state results
  */
@@ -38,15 +51,14 @@ export function endTurn(state: GameState): GameState {
     const nextState: GameState = { ...state };
 
     if (isCheckmate(state)) {
-        const winner = getOppositeColor(state.turn);
-        nextState.result = `${winner}-win`;
-        nextState.endReason = "checkmate";
+        nextState.result = 0;
+        nextState.end_reason = "checkmate"
         return nextState;
     }
 
     if (isStalemate(state)) {
-        nextState.result = "draw";
-        nextState.endReason = "stalemate";
+        nextState.result = 1;
+        nextState.end_reason = "stalemate";
         return nextState;
     }
 
