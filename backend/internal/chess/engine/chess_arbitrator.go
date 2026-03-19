@@ -462,6 +462,14 @@ func isSquareAttacked(board chess.Board, squarePosition chess.Position, color ch
 		return true
 	}
 
+	kingMoves := []chess.Position{
+		{Row: 1, Col: 0}, {Row: -1, Col: 0}, {Row: 0, Col: 1}, {Row: 0, Col: -1},
+		{Row: 1, Col: 1}, {Row: 1, Col: -1}, {Row: -1, Col: 1}, {Row: -1, Col: -1},
+	}
+	if attackedByStepper(board, squarePosition, color, kingMoves, chess.KingPiece) {
+		return true
+	}
+
 	pawnDir := 1
 	if color == chess.PieceWhite {
 		pawnDir = -1
