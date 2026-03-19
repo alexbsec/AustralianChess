@@ -29,3 +29,7 @@ export type GameState = {
 };
 
 export type PieceSide = "white" | "black";
+
+export function colorToPieceSide(color: PieceColor): PieceSide {
+    return color == 0 ? "white" : "black";
+}

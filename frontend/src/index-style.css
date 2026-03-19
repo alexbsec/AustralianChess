@@ -628,3 +628,71 @@ select {
 .room-board:active {
     cursor: grabbing;
 }
+
+.promotion-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.promotion-picker {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+.promotion-label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+}
+
+.promotion-grid {
+    display: flex;
+    gap: 8px;
+}
+
+.promotion-option {
+    width: 72px;
+    height: 72px;
+    background: var(--surface-raised, var(--surface));
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.promotion-option:hover {
+    border-color: var(--primary);
+    background: var(--primary-subtle, rgba(255, 255, 255, 0.05));
+    transform: translateY(-2px);
+}
+
+.promotion-option:active {
+    transform: translateY(0);
+}
+
+.promotion-option img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}

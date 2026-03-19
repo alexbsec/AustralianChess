@@ -1,9 +1,11 @@
-import type { 
-    PieceColor, 
-    GameState,
+import {
+    type PieceColor,
+    type GameState,
+    type PieceKind,
+    colorToPieceSide,
 } from "../engine/types";
 import type { UIState } from "../ui/types";
-import { BOARD_SIZE, PIECE_ASSETS } from "../engine/constants";
+import { BISHOP_PIECE, BOARD_SIZE, KANGAROO_PIECE, KNIGHT_PIECE, OLIGARCH_PIECE, PIECE_ASSETS, QUEEN_PIECE, ROOK_PIECE } from "../engine/constants";
 import { positionsEqual, pieceColorToSide, pieceKindToName, displayToBoardPosition } from "../engine/coords";
 
 export class RoomView {
@@ -81,9 +83,9 @@ export class RoomView {
 
         const modalOverlay = document.createElement("div");
         modalOverlay.id = "game-over-modal";
-        modalOverlay.className = "modal-overlay"; 
-        
-        modalOverlay.style.zIndex = "99999"; 
+        modalOverlay.className = "modal-overlay";
+
+        modalOverlay.style.zIndex = "99999";
         modalOverlay.removeAttribute('hidden');
         modalOverlay.style.display = 'flex';
 
@@ -110,12 +112,64 @@ export class RoomView {
         });
     }
 
+    public showPromotionPicker(color: PieceColor, onPick: (piece: PieceKind) => void): void {
+        const existing = document.getElementById("promotion-overlay");
+        if (existing) existing.remove();
+
+        const side = colorToPieceSide(color);
+        const options: { kind: PieceKind; name: string }[] = [
+            { kind: QUEEN_PIECE, name: "queen" },
+            { kind: ROOK_PIECE, name: "rook" },
+            { kind: BISHOP_PIECE, name: "bishop" },
+            { kind: KNIGHT_PIECE, name: "knight" },
+            { kind: OLIGARCH_PIECE, name: "oligarch" },
+            { kind: KANGAROO_PIECE, name: "kangaroo" },
+        ];
+
+        const overlay = document.createElement("div");
+        overlay.id = "promotion-overlay";
+        overlay.className = "promotion-overlay";
+
+        const picker = document.createElement("div");
+        picker.className = "promotion-picker";
+
+        const label = document.createElement("p");
+        label.className = "promotion-label";
+        label.textContent = "Promote pawn to:";
+        picker.appendChild(label);
+
+        const grid = document.createElement("div");
+        grid.className = "promotion-grid";
+
+        options.forEach(({ kind, name }) => {
+            const btn = document.createElement("button");
+            btn.className = "promotion-option";
+            btn.title = name
+
+            const img = document.createElement("img");
+            img.src = PIECE_ASSETS[side][name]
+            img.alt = name;
+            img.draggable = false;
+
+            btn.appendChild(img);
+            btn.addEventListener("click", () => {
+                overlay.remove();
+                onPick(kind);
+            });
+            grid.appendChild(btn);
+        });
+
+        picker.appendChild(grid);
+        overlay.appendChild(picker);
+        document.body.appendChild(overlay);
+    }
+
     /**
      * Completely re-renders the board squares based on UI and Game state.
      */
     public renderBoard(gameState: GameState, playerColor: PieceColor, uiState: UIState): void {
         this.boardElement.innerHTML = "";
-        
+
         for (let row = 0; row < BOARD_SIZE; row++) {
             for (let col = 0; col < BOARD_SIZE; col++) {
                 const square = this.createSquare(row, col, gameState, playerColor, uiState);
@@ -125,15 +179,15 @@ export class RoomView {
     }
 
     private createSquare(
-        displayRow: number, 
-        displayCol: number, 
-        gameState: GameState, 
-        playerColor: PieceColor, 
+        displayRow: number,
+        displayCol: number,
+        gameState: GameState,
+        playerColor: PieceColor,
         uiState: UIState
     ): HTMLDivElement {
         const boardPos = displayToBoardPosition({ row: displayRow, col: displayCol }, playerColor);
         const squareData = gameState.board.data[boardPos.row][boardPos.col];
-        
+
         const square = document.createElement("div");
         square.className = `room-board-square ${(displayRow + displayCol) % 2 === 0 ? "light" : "dark"}`;
         square.dataset.row = String(displayRow);
@@ -157,7 +211,7 @@ export class RoomView {
             if (!isBeingDragged) {
                 const name = pieceKindToName(squareData.piece.kind);
                 const side = pieceColorToSide(squareData.piece.color);
-                
+
                 const img = document.createElement("img");
                 img.className = "room-piece";
                 img.src = PIECE_ASSETS[side][name];

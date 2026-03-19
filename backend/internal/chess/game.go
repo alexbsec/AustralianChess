@@ -13,11 +13,12 @@ type Result struct {
 }
 
 type GameState struct {
-	Board     Board       `json:"board"`
-	Turn      PieceColor  `json:"turn"`
-	Result    *GameResult `json:"result"`
-	EndReason *string     `json:"end_reason"`
-	InCheck   bool        `json:"in_check"`
+	Board            Board       `json:"board"`
+	Turn             PieceColor  `json:"turn"`
+	Result           *GameResult `json:"result"`
+	EndReason        *string     `json:"end_reason"`
+	InCheck          bool        `json:"in_check"`
+	PendingPromotion *Position   `json:"pending_promotion"`
 }
 
 func NewGame(board Board) *GameState {

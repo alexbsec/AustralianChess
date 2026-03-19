@@ -1,7 +1,7 @@
 import { RoomView } from "./room_view";
 import { RoomSocket } from "./room_socket";
 import { RoomState } from "./room_state";
-import type { GameState, PieceColor } from "../engine/types";
+import type { GameState, PieceColor, PieceKind, Position } from "../engine/types";
 import {
     displayToBoardPosition,
     getSquareAtPosition,
@@ -20,6 +20,7 @@ export class RoomController {
     private moveSound: HTMLAudioElement;
     private captureSound: HTMLAudioElement;
     private checkSound: HTMLAudioElement;
+    private optimisticState: GameState | null = null;
     private draggedElement: HTMLElement | null = null;
     private audioUnlocked: boolean = false;
 
@@ -240,16 +241,55 @@ export class RoomController {
 
         const isLegal = this.state.uiState.possibleMoves.some(m => positionsEqual(m, destination));
 
-        if (isLegal) {
-            this.state.movePending = true;
-            this.socket.sendMove(this.state.playerColor!, selectedPos, destination);
-            this.view.activityText.textContent = "Move accepted. Waiting for opponent's response.";
-            this.sync();
-        } else {
+        if (!isLegal) {
             this.cancelDrag();
+            this.state.uiState.isMouseDown = false;
+            return
         }
 
+        const isPromotion = this.isPawnPromotion(selectedPos, destination);
+        if (isPromotion) {
+            this.view.showPromotionPicker(this.state.playerColor!, (_choosenPiece) => {
+                this.applyOptimisticMove(selectedPos, destination, null);
+                this.state.movePending = true;
+                // this.socket.sendPromote(this.state.playerColor!, chosenPiece);
+                this.socket.sendMove(this.state.playerColor!, selectedPos, destination);
+                this.view.activityText.textContent = "Promoting...";
+                this.sync();
+            });
+        } else {
+            this.applyOptimisticMove(selectedPos, destination, null);
+            this.state.movePending = true;
+            // this.socket.sendPromote(this.state.playerColor!, chosenPiece);
+            this.socket.sendMove(this.state.playerColor!, selectedPos, destination);
+            this.view.activityText.textContent = "Promoting...";
+            this.sync();
+        }
+
+
+        if (this.optimisticState) { }
+
         this.state.uiState.isMouseDown = false;
+    }
+
+    private isPawnPromotion(from: Position, to: Position): boolean {
+        const piece = getSquareAtPosition(this.state.gameState!, from)?.piece;
+        if (!piece || piece?.kind !== 0) return false;
+        const backRank = this.state.playerColor === 0 ? 0 : 11;
+        return to.row === backRank;
+    }
+
+    private applyOptimisticMove(from: Position, to: Position, promoteTo: PieceKind | null): void {
+        this.optimisticState = structuredClone(this.state.gameState!);
+
+        const board = this.state.gameState!.board.data;
+        const piece = board[from.row][from.col].piece;
+        board[to.row][to.col].piece = promoteTo !== null ? { kind: promoteTo, color: this.state.playerColor! } : piece;
+        board[from.row][from.col].piece = null;
+
+        this.state.uiState.selected = null;
+        this.state.uiState.possibleMoves = [];
+        this.state.uiState.draggingPos = null;
     }
 
     private sync(): void {

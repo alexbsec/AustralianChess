@@ -38,4 +38,3 @@ export const PIECE_ASSETS: Record<PieceSide, Record<string, string>> = {
     },
 };
 
-
