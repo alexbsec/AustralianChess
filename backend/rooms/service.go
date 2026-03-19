@@ -112,6 +112,9 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parse
 	case parser.MoveCommand:
 		moveCmd := cmd.(parser.MoveCommand)
 		return s.handleMoveCommand(ctx, room, moveCmd)
+	case parser.PromoteCommand:
+		promoteCmd := cmd.(parser.PromoteCommand)
+		return s.handlePromoteCommand(ctx, room, promoteCmd)
 	default:
 		return nil, errors.New("unknown command")
 	}
@@ -143,6 +146,30 @@ func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId strin
 	joinResult.GameStarted = room.GameStarted
 	joinResult.Success = true
 	return joinResult, nil
+}
+
+func (s *Service) handlePromoteCommand(ctx context.Context, room *Room, cmd parser.PromoteCommand) (parser.Result, error) {
+	result := parser.PromotionResult{
+		RoomId: cmd.RoomId,
+		Promoted: false,
+		GameState: *room.GameState,
+	}
+
+	engineResult := s.chessEngine.PromotePawn(room.GameState, cmd.RequesteeColor, cmd.PromoteTo, cmd.PiecePosition, cmd.DestPosition)
+	switch engineResult.Type {
+	case engine.ErrorResponse:
+		log.Printf("error attempting to promote pawn: %v", engineResult.Message)
+		return nil, fmt.Errorf("error: %v", engineResult.Message)
+	case engine.FailureResponse:
+		log.Printf("could not promote pawn due to validation: %v", engineResult.Message)
+		return result, nil
+	default:
+		break
+	}
+
+	result.Promoted = true
+	result.GameState = *room.GameState
+	return result, nil	
 }
 
 func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd parser.MoveCommand) (parser.Result, error) {

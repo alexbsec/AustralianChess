@@ -23,6 +23,13 @@ type PlayerJoinedResult struct {
 	GameStarted bool   `json:"game_started"`
 }
 
+type PromotionResult struct {
+	RoomId    string          `json:"room_id"`
+	Promoted  bool            `json:"promoted"`
+	GameState chess.GameState `json:"game_state"`
+}
+
 func (MoveResult) IsResult()          {}
 func (PlayerJoinedResult) IsResult()  {}
 func (FailedCommandResult) IsResult() {}
+func (PromotionResult) IsResult()     {}

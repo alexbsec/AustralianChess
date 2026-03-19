@@ -1,4 +1,4 @@
-import type { WsMessage, GameStateMessage, RoomStatusMessage, MoveResultMessage } from "./types";
+import type { WsMessage, GameStateMessage, RoomStatusMessage, MoveResultMessage, PromoteResultMessage } from "./types";
 import { getAccessToken } from "../auth";
 
 export function isGameStateMessage(message: WsMessage): message is GameStateMessage {
@@ -11,6 +11,10 @@ export function isRoomStatusMessage(message: WsMessage): message is RoomStatusMe
 
 export function isMoveResultMessage(message: WsMessage): message is MoveResultMessage {
     return "moved" in message && "game_state" in message && "room_id" in message;
+}
+
+export function isPromotionResultMessage(message: WsMessage): message is PromoteResultMessage {
+    return "promoted" in message && "game_state" in message && "room_id" in message;
 }
 
 export function buildRoomWsUrl(roomId: string): string {

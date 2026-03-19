@@ -21,9 +21,28 @@ func (d *RoomParser) ParseMessage(roomId string, rawMsg []byte) (Command, error)
 	switch envelope.Type {
 	case "make_move":
 		return d.parseMakeMoveCommand(roomId, rawMsg)
+	case "pawn_promote":
+		return d.parsePromoteCommand(roomId, rawMsg)
 	default:
 		return nil, errors.New("unknown command")
 	}
+}
+
+func (d *RoomParser) parsePromoteCommand(roomId string, rawMsg []byte) (Command, error) {
+	var msg PromotePawnMessage
+	if err := json.Unmarshal(rawMsg, &msg); err != nil {
+		return nil, err
+	}
+
+	promoteCmd := PromoteCommand{
+		RoomId:         roomId,
+		RequesteeColor: msg.RequesteeColor,
+		PromoteTo:      msg.PromoteTo,
+		PiecePosition:  msg.PawnPosition,
+		DestPosition:   msg.DestPosition,
+	}
+
+	return promoteCmd, nil
 }
 
 func (d *RoomParser) parseMakeMoveCommand(roomId string, rawMsg []byte) (Command, error) {

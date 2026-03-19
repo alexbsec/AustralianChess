@@ -38,6 +38,12 @@ export class RoomController {
                 }
                 this.handleMoveResult(moved, state);
             },
+            onPromoteResult: (promoted, state) => {
+                if (promoted) {
+                    this.playCorrectSound(state);
+                }
+                this.handleMoveResult(promoted, state);
+            },
             onOpen: () => {
                 this.view.updateStatus(
                     "Connected",
@@ -249,11 +255,10 @@ export class RoomController {
 
         const isPromotion = this.isPawnPromotion(selectedPos, destination);
         if (isPromotion) {
-            this.view.showPromotionPicker(this.state.playerColor!, (_choosenPiece) => {
+            this.view.showPromotionPicker(this.state.playerColor!, (chosenPiece) => {
                 this.applyOptimisticMove(selectedPos, destination, null);
                 this.state.movePending = true;
-                // this.socket.sendPromote(this.state.playerColor!, chosenPiece);
-                this.socket.sendMove(this.state.playerColor!, selectedPos, destination);
+                this.socket.sendPromote(this.state.playerColor!, chosenPiece, selectedPos, destination);
                 this.view.activityText.textContent = "Promoting...";
                 this.sync();
             });

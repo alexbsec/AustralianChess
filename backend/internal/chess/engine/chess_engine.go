@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 )
@@ -88,8 +89,79 @@ func (ce *ChessEngine) ValidateAndMove(gameState *chess.GameState, requesteeColo
 	}
 }
 
+func (ce *ChessEngine) PromotePawn(gameState *chess.GameState, requesteeColor chess.PieceColor, toPiece chess.PieceKind, pawnPos chess.Position, destPos chess.Position) ValidationResponse {
+	if gameState == nil {
+		return ValidationResponse{
+			Type:    ErrorResponse,
+			Message: "no engine was passed to validate the move",
+		}
+	}
+
+	piece := gameState.Board.GetPiece(pawnPos)
+	if piece == nil {
+		return ValidationResponse{
+			Type:    FailureResponse,
+			Message: fmt.Sprintf("no piece to move at position: %v", pawnPos),
+		}
+	}
+
+	if piece.Kind != chess.PawnPiece {
+		return ValidationResponse{
+			Type: FailureResponse,
+			Message: fmt.Sprintf("cannot promote non-pawn piece. Want: %d, got: %d", chess.PawnPiece, piece.Kind),
+		}
+	}
+
+	if piece.Color != requesteeColor {
+		return ValidationResponse{
+			Type: FailureResponse,
+			Message: "cannot promote opponent's pawn piece",
+		}
+	}
+
+
+	log.Printf("pawnPos: %v, destPos: %v", pawnPos, destPos)
+	canMove, feedback := ce.arbiter.CanMovePiece(gameState.Board, *piece, pawnPos, destPos)
+	if !canMove {
+		return ValidationResponse{
+			Type: FailureResponse,
+			Message: fmt.Sprintf("cannot move pawn to promotion site. From: %v, To: %v", pawnPos, destPos),
+		}
+	}
+
+	err := movePiece(gameState, pawnPos, destPos)
+	if err != nil {
+		return ValidationResponse{
+			Type:    ErrorResponse,
+			Message: "cannot move on empty square",
+		}
+	}
+
+	opponentColor := chess.OponentColor(requesteeColor)
+	if ce.arbiter.IsInCheck(gameState.Board, opponentColor) {
+		gameState.InCheck = true
+	} else {
+		gameState.InCheck = false
+	}
+
+	promotePawn(gameState, requesteeColor, toPiece, destPos)	
+	switchTurn(gameState)
+
+	return ValidationResponse{
+		Type:    SuccessResponse,
+		Message: feedback,
+	}
+}
+
+func promotePawn(gameState *chess.GameState, requesteeColor chess.PieceColor, toPiece chess.PieceKind, pawnPos chess.Position) {
+	promotedPiece := chess.NewPiece(toPiece, requesteeColor)
+	nextBoard := gameState.Board.Clone()
+	nextBoard.Data[pawnPos.Row][pawnPos.Col].Piece = promotedPiece
+	gameState.Board = nextBoard
+}
+
 func movePiece(gameState *chess.GameState, fromPos, toPos chess.Position) error {
-	nextBoard := gameState.Board
+	nextBoard := gameState.Board.Clone()
 	err := nextBoard.MovePiece(fromPos, toPos)
 	if err != nil {
 		return err

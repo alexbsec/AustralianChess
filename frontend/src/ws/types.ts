@@ -19,4 +19,10 @@ export type MoveResultMessage = {
     game_state: GameState;
 };
 
-export type WsMessage = GameStateMessage | RoomStatusMessage | MoveResultMessage;
+export type PromoteResultMessage = {
+    room_id: string;
+    promoted: boolean;
+    game_state: GameState;
+};
+
+export type WsMessage = GameStateMessage | RoomStatusMessage | MoveResultMessage | PromoteResultMessage;
