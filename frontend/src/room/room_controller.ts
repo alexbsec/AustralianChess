@@ -77,6 +77,9 @@ export class RoomController {
     }
 
     private initEvents(): void {
+        this.view.boardElement.addEventListener("touchstart", (e) => this.onTouchStart(e), { passive: false });
+        window.addEventListener("touchmove", (e) => this.onTouchMove(e), { passive: false });
+        window.addEventListener("touchend", (e) => this.onTouchEnd(e));
         this.view.boardElement.addEventListener("mousedown", (e) => this.onMouseDown(e));
         this.view.boardElement.addEventListener("mouseup", (e) => this.onMouseUp(e));
 
@@ -90,19 +93,44 @@ export class RoomController {
         });
     }
 
+    private onTouchStart(event: TouchEvent): void {
+        event.preventDefault(); // stops page scroll
+        const touch = event.touches[0];
+        this.onMouseDown(new MouseEvent("mousedown", {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            bubbles: true
+        }));
+    }
+
+    private onTouchMove(event: TouchEvent): void {
+        event.preventDefault();
+        const touch = event.touches[0];
+        this.onMouseMove(new MouseEvent("mousemove", {
+            clientX: touch.clientX,
+            clientY: touch.clientY
+        }));
+    }
+
+    private onTouchEnd(event: TouchEvent): void {
+        const touch = event.changedTouches[0]; // changedTouches, not touches (finger is lifted)
+        this.onMouseUp(new MouseEvent("mouseup", {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            bubbles: true
+        }));
+    }
+
     private playCorrectSound(newState: GameState): void {
         const oldState = this.state.gameState;
         if (!oldState) return;
 
-        // 1. Check for Capture (still handled by comparing piece counts)
         const oldPieceCount = oldState.board.data.flat().filter(sq => sq.piece !== null).length;
         const newPieceCount = newState.board.data.flat().filter(sq => sq.piece !== null).length;
         const isCapture = newPieceCount < oldPieceCount;
 
-        // 2. Check for "Check" (now a simple boolean check!)
         const isCheck = newState.in_check;
 
-        // 3. Priority: Check > Capture > Normal Move
         if (isCheck) {
             this.playSound(this.checkSound);
         } else if (isCapture) {
