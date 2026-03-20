@@ -5,4 +5,5 @@ export type UIState = {
     possibleMoves: Position[];
     isMouseDown: boolean;
     draggingPos: Position | null;
+    lastMove: { from: Position; to: Position} | null;
 };

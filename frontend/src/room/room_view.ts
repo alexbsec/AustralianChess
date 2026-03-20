@@ -220,6 +220,14 @@ export class RoomView {
             }
         }
 
+        if (uiState.lastMove) {
+            const { from, to } = uiState.lastMove;
+            if (positionsEqual(boardPos, from) || positionsEqual(boardPos, to)) {
+                square.classList.add("last-move");
+                console.log("element:", square);
+            }
+        }
+
         return square;
     }
 

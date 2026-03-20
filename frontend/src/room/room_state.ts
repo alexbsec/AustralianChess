@@ -1,6 +1,6 @@
 import type { 
     GameState, 
-    PieceColor, 
+    PieceColor,
 } from "../engine/types";
 
 import type { UIState } from "../ui/types";
@@ -20,6 +20,7 @@ export class RoomState {
         possibleMoves: [],
         isMouseDown: false,
         draggingPos: null,
+        lastMove: null,
     };
 
     /**

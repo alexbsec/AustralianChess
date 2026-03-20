@@ -122,9 +122,15 @@ export class RoomController {
     private handleGameState(state: GameState, color?: PieceColor): void {
         const isSubsequentMove = this.state.gameState !== null;
         const oldTurn = this.state.gameState?.turn;
+        const oldState = this.state.gameState;
 
         if (isSubsequentMove && oldTurn !== state.turn && Number(state.turn) === Number(this.state.playerColor)) {
             this.playCorrectSound(state);
+        }
+
+        console.log("old state:", oldState);
+        if (oldState) {
+            this.state.uiState.lastMove = this.detectLastMove(oldState, state);
         }
 
         this.state.updateGameState(state, color);
@@ -147,6 +153,14 @@ export class RoomController {
     }
 
     private handleMoveResult(moved: boolean, state: GameState): void {
+        const oldState = this.state.gameState;
+        const wasMyMove = this.state.movePending;
+
+        if (moved && oldState && !wasMyMove) {
+            // opponent's move — detect from diff
+            this.state.uiState.lastMove = this.detectLastMove(oldState, state);
+        }
+
         this.state.updateGameState(state);
         this.state.uiState.draggingPos = null;
         this.state.clearSelection();
@@ -154,6 +168,7 @@ export class RoomController {
 
         if (!moved) {
             this.view.activityText.textContent = "Illegal move rejected by server.";
+            this.state.uiState.lastMove = null;
         }
         this.sync();
     }
@@ -265,7 +280,6 @@ export class RoomController {
         } else {
             this.applyOptimisticMove(selectedPos, destination, null);
             this.state.movePending = true;
-            // this.socket.sendPromote(this.state.playerColor!, chosenPiece);
             this.socket.sendMove(this.state.playerColor!, selectedPos, destination);
             this.view.activityText.textContent = "Promoting...";
             this.sync();
@@ -284,6 +298,29 @@ export class RoomController {
         return to.row === backRank;
     }
 
+    private detectLastMove(oldState: GameState, newState: GameState): { from: Position; to: Position } | null {
+        let from: Position | null = null;
+        let to: Position | null = null;
+
+        for (let r = 0; r < oldState.board.data.length; r++) {
+            for (let c = 0; c < oldState.board.data[r].length; c++) {
+                const oldPiece = oldState.board.data[r][c].piece;
+                const newPiece = newState.board.data[r][c].piece;
+
+                if (oldPiece && !newPiece) {
+                    from = { row: r, col: c };
+                }
+
+                if (!oldPiece && newPiece) {
+                    to = { row: r, col: c };
+                }
+            }
+        }
+
+        console.log("diff -> from:", from, "to:", to);
+        return from && to ? { from, to } : null;
+    }
+
     private applyOptimisticMove(from: Position, to: Position, promoteTo: PieceKind | null): void {
         this.optimisticState = structuredClone(this.state.gameState!);
 
@@ -295,6 +332,7 @@ export class RoomController {
         this.state.uiState.selected = null;
         this.state.uiState.possibleMoves = [];
         this.state.uiState.draggingPos = null;
+        this.state.uiState.lastMove = { from, to };
     }
 
     private sync(): void {
