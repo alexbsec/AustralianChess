@@ -155,7 +155,7 @@ export function renderRegisterPage(container: HTMLDivElement): void {
 
     const loginHint = document.createElement("p");
     loginHint.className = "auth-footer-text";
-    loginHint.innerHTML = `Already have an account? <a href="/login.html">Login</a>`;
+    loginHint.innerHTML = `Already have an account? <a href="/login">Login</a>`;
 
     function setFeedback(message: string, type: "error" | "success"): void {
         feedback.className = `form-feedback ${type}`;
@@ -241,7 +241,7 @@ export function renderRegisterPage(container: HTMLDivElement): void {
             updateStrengthBar();
 
             setTimeout(() => {
-                window.location.href = `/login.html?username=${encodeURIComponent(data.player_id)}`;
+                window.location.href = `/login`;
             }, 1400);
         } catch (error) {
             console.error(error);
