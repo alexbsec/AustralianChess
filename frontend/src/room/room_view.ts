@@ -256,7 +256,7 @@ export class RoomView {
             copyBtn.innerHTML = `${copyIconSvg} Copy room link`;
 
             copyBtn.addEventListener("click", () => {
-                const url = `${window.location.origin}/?roomId=${roomId}`;
+                const url = `${window.location.origin}/room?id=${roomId}`;
                 navigator.clipboard.writeText(url).then(() => {
                     copyBtn.innerHTML = `${checkIconSvg} Room link copied to clipboard`;
                     setTimeout(() => {

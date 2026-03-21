@@ -14,7 +14,13 @@ if (!app) {
 
 function router(): void {
     const path = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get("roomId");
 
+    if (roomId && path !== "/room") {
+        navigateTo(`/room?roomId=${roomId}`);
+        return;
+    }
     app.innerHTML = "";
 
     switch (path) {
