@@ -35,6 +35,7 @@ export class RoomView {
                         <div class="hero-badge">Room</div>
                         <h1 class="room-title">Australian Chess</h1>
                         <p class="room-subtitle" id="room-id-label"></p>
+                        <button class="btn btn-secondary" id="copy-link-btn" style="width: fit-content; padding: 6px 12px;">Copy room link to share with friends!</button>
                     </div>
                     <div class="room-header-actions">
                         <button class="btn btn-secondary" id="back-btn">Back</button>
@@ -243,5 +244,28 @@ export class RoomView {
     public updateRoomId(roomId: string): void {
         const label = this.container.querySelector("#room-id-label");
         if (label) label.textContent = `Room ID: ${roomId}`;
+
+        const copyBtn = this.container.querySelector<HTMLButtonElement>("#copy-link-btn");
+        if (copyBtn) {
+            const copyIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+            const checkIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 16 4 11"/></svg>`;
+
+            copyBtn.style.display = "flex";
+            copyBtn.style.alignItems = "center";
+            copyBtn.style.gap = "6px";
+            copyBtn.innerHTML = `${copyIconSvg} Copy room link`;
+
+            copyBtn.addEventListener("click", () => {
+                const url = `${window.location.origin}/?roomId=${roomId}`;
+                navigator.clipboard.writeText(url).then(() => {
+                    copyBtn.innerHTML = `${checkIconSvg} Room link copied to clipboard`;
+                    setTimeout(() => {
+                        copyBtn.innerHTML = `${copyIconSvg} Copy room link`;
+                    }, 2000);
+                }).catch(() => {
+                    prompt("Copy this link:", url);
+                });
+            });
+        }
     }
 }
