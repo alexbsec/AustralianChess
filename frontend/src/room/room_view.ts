@@ -224,7 +224,6 @@ export class RoomView {
             const { from, to } = uiState.lastMove;
             if (positionsEqual(boardPos, from) || positionsEqual(boardPos, to)) {
                 square.classList.add("last-move");
-                console.log("element:", square);
             }
         }
 

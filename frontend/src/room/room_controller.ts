@@ -23,6 +23,9 @@ export class RoomController {
     private optimisticState: GameState | null = null;
     private draggedElement: HTMLElement | null = null;
     private audioUnlocked: boolean = false;
+    private isTouchingBoard: boolean = false;
+    private dragWidth: number = 0;
+    private dragHeight: number = 0;
 
     constructor(container: HTMLDivElement, roomId: string) {
         this.state = new RoomState();
@@ -94,17 +97,38 @@ export class RoomController {
     }
 
     private onTouchStart(event: TouchEvent): void {
-        event.preventDefault(); // stops page scroll
         const touch = event.touches[0];
-        this.onMouseDown(new MouseEvent("mousedown", {
-            clientX: touch.clientX,
-            clientY: touch.clientY,
-            bubbles: true
-        }));
+
+        const element = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+        const square = element?.closest<HTMLDivElement>(".room-board-square");
+
+        if (!square) return;
+
+        // Check game state directly instead of querying DOM for pieceImg
+        const boardPos = displayToBoardPosition(
+            { row: Number(square.dataset.row), col: Number(square.dataset.col) },
+            this.state.playerColor!
+        );
+        const squareData = getSquareAtPosition(this.state.gameState!, boardPos);
+        const hasFriendlyPiece = squareData?.piece?.color === this.state.playerColor;
+
+        this.isTouchingBoard = !!(hasFriendlyPiece && this.state.isMyTurn() && this.state.canInteract());
+
+        if (this.isTouchingBoard) {
+            event.preventDefault();
+            this.onMouseDown(new MouseEvent("mousedown", {
+                clientX: touch.clientX,
+                clientY: touch.clientY,
+                bubbles: true
+            }));
+        }
     }
 
     private onTouchMove(event: TouchEvent): void {
-        event.preventDefault();
+        if (this.isTouchingBoard) {
+            event.preventDefault();
+        }
+
         const touch = event.touches[0];
         this.onMouseMove(new MouseEvent("mousemove", {
             clientX: touch.clientX,
@@ -113,6 +137,7 @@ export class RoomController {
     }
 
     private onTouchEnd(event: TouchEvent): void {
+        this.isTouchingBoard = false;
         const touch = event.changedTouches[0]; // changedTouches, not touches (finger is lifted)
         this.onMouseUp(new MouseEvent("mouseup", {
             clientX: touch.clientX,
@@ -156,7 +181,6 @@ export class RoomController {
             this.playCorrectSound(state);
         }
 
-        console.log("old state:", oldState);
         if (oldState) {
             this.state.uiState.lastMove = this.detectLastMove(oldState, state);
         }
@@ -216,7 +240,14 @@ export class RoomController {
 
         if (!this.state.canInteract()) return;
 
-        const square = (event.target as HTMLElement).closest<HTMLDivElement>(".room-board-square");
+        // Clean up any existing drag ghost before starting a new one
+        if (this.draggedElement) {
+            this.draggedElement.remove();
+            this.draggedElement = null;
+        }
+
+        const element = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement;
+        const square = element?.closest<HTMLDivElement>(".room-board-square");
         if (!square) return;
 
         const pieceImg = square.querySelector<HTMLImageElement>(".room-piece");
@@ -234,29 +265,35 @@ export class RoomController {
             this.state.uiState.possibleMoves = getPseudoLegalMoves(this.state.gameState!, boardPos);
             this.state.uiState.draggingPos = boardPos;
 
+
+            const rect = pieceImg.getBoundingClientRect();
+            this.dragWidth = rect.width || 40;   
+            this.dragHeight = rect.height || 40;
+
             this.draggedElement = pieceImg.cloneNode(true) as HTMLElement;
             this.draggedElement.classList.add("dragging-piece");
 
             Object.assign(this.draggedElement.style, {
                 position: 'fixed',
-                width: `${pieceImg.offsetWidth}px`,
-                height: `${pieceImg.offsetHeight}px`,
+                width: `${this.dragWidth}px`,
+                height: `${this.dragHeight}px`,
                 pointerEvents: 'none',
-                zIndex: '1000',
-                left: `${event.clientX - pieceImg.offsetWidth / 2}px`,
-                top: `${event.clientY - pieceImg.offsetHeight / 2}px`
+                zIndex: '9999',
+                left: `${event.clientX - this.dragWidth / 2}px`,
+                top: `${event.clientY - this.dragHeight / 2}px`
             });
 
             document.body.appendChild(this.draggedElement);
             this.state.uiState.isMouseDown = true;
             this.sync();
+            console.log("ghost in DOM:", document.body.contains(this.draggedElement));
         }
     }
 
     private onMouseMove(event: MouseEvent): void {
         if (!this.draggedElement) return;
-        this.draggedElement.style.left = `${event.clientX - this.draggedElement.offsetWidth / 2}px`;
-        this.draggedElement.style.top = `${event.clientY - this.draggedElement.offsetHeight / 2}px`;
+        this.draggedElement.style.left = `${event.clientX - this.dragWidth / 2}px`;
+        this.draggedElement.style.top = `${event.clientY - this.dragHeight / 2}px`;
     }
 
     private onMouseUp(event: MouseEvent): void {
@@ -272,7 +309,8 @@ export class RoomController {
             return;
         }
 
-        const square = (event.target as HTMLElement).closest<HTMLDivElement>(".room-board-square");
+        const element = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement;
+        const square = element?.closest<HTMLDivElement>(".room-board-square");
         if (!square) {
             this.cancelDrag();
             return;
@@ -345,7 +383,6 @@ export class RoomController {
             }
         }
 
-        console.log("diff -> from:", from, "to:", to);
         return from && to ? { from, to } : null;
     }
 
@@ -384,7 +421,6 @@ export class RoomController {
 
         if (hasEnded && !this.modalShown) {
             const reason = gameState.end_reason || "Match finished.";
-            console.log("firing game over modal with reason:", reason);
             this.view.statusText.textContent = "Match finished.";
             this.view.activityText.textContent = reason;
             this.view.turnTitle.textContent = "Game Finished";
@@ -404,7 +440,6 @@ export class RoomController {
                 }
             });
 
-            console.log("Game ended with reason:", reason);
             this.modalShown = true;
             return;
         }

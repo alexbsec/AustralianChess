@@ -491,6 +491,7 @@ select {
 
 .room-board-square {
     position: relative;
+    touch-action: none;
     display: flex;
     align-items: center;
     justify-content: center;
