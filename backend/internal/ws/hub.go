@@ -11,7 +11,7 @@ import (
 )
 
 type Hub struct {
-	mtx         sync.RWMutex
+	mtx         sync.Mutex
 	roomClients map[string]*RoomClient
 	onRoomEmpty func(roomId string)
 }
@@ -50,12 +50,24 @@ func (h *Hub) AddClient(roomId, playerId string, conn *websocket.Conn) (*Client,
 	room := h.roomClients[roomId]
 
 	if room.PlayerOne != nil && room.PlayerOne.PlayerId == playerId {
+		select {
+		case <-room.PlayerOne.Done:
+		default:
+			close(room.PlayerOne.Done)
+		}
+		room.PlayerOne.Done = make(chan struct{})
 		room.PlayerOne.Conn = conn
 		log.Printf("client reconnected as %s", room.PlayerOne.Role)
 		return room.PlayerOne, nil
 	}
 
 	if room.PlayerTwo != nil && room.PlayerTwo.PlayerId == playerId {
+		select {
+		case <-room.PlayerTwo.Done:
+		default:
+			close(room.PlayerTwo.Done)
+		}
+		room.PlayerTwo.Done = make(chan struct{})
 		room.PlayerTwo.Conn = conn
 		log.Printf("client reconnected as %s", room.PlayerTwo.Role)
 		return room.PlayerTwo, nil
@@ -130,41 +142,31 @@ func (h *Hub) RemoveClient(roomId string, conn *websocket.Conn) {
 }
 
 func (h *Hub) Broadcast(roomId string, message any) error {
-	h.mtx.RLock()
+    h.mtx.Lock()
+    room, ok := h.roomClients[roomId]
+    if !ok {
+        h.mtx.Unlock()
+        return nil
+    }
+    room.LastActive = time.Now()
+    clients := make([]*Client, 0, 2+len(room.Spectators))
+    if room.PlayerOne != nil && room.PlayerOne.Conn != nil {
+        clients = append(clients, room.PlayerOne)
+    }
+    if room.PlayerTwo != nil && room.PlayerTwo.Conn != nil {
+        clients = append(clients, room.PlayerTwo)
+    }
+    for _, c := range room.Spectators {
+        clients = append(clients, c)
+    }
+    h.mtx.Unlock()
 
-	if room, ok := h.roomClients[roomId]; ok {
-		room.LastActive = time.Now()
-	}
-
-	room, ok := h.roomClients[roomId]
-	if !ok {
-		h.mtx.RUnlock()
-		return nil
-	}
-
-	clients := make([]*websocket.Conn, 0, 2+len(room.Spectators))
-
-	if room.PlayerOne != nil && room.PlayerOne.Conn != nil {
-		clients = append(clients, room.PlayerOne.Conn)
-	}
-
-	if room.PlayerTwo != nil && room.PlayerTwo.Conn != nil {
-		clients = append(clients, room.PlayerTwo.Conn)
-	}
-
-	for conn := range room.Spectators {
-		clients = append(clients, conn)
-	}
-
-	h.mtx.RUnlock()
-
-	for _, conn := range clients {
-		if err := conn.WriteJSON(message); err != nil {
-			log.Printf("broadcast failed: %v", err)
-		}
-	}
-
-	return nil
+    for _, client := range clients {
+        if err := client.WriteJSON(message); err != nil {
+            log.Printf("broadcast failed: %v", err)
+        }
+    }
+    return nil
 }
 
 func (h *Hub) cleanupRooms() {

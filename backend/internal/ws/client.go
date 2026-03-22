@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"sync"
 	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
@@ -21,6 +22,8 @@ type Client struct {
 	PlayerId string
 	Color    *chess.PieceColor
 	Role     Role
+	WriteMtx sync.Mutex
+	Done     chan struct{}
 }
 
 type RoomClient struct {
@@ -40,6 +43,7 @@ func NewClient(roomId string, conn *websocket.Conn) *Client {
 	return &Client{
 		Conn:   conn,
 		RoomId: roomId,
+		Done: make(chan struct{}),
 	}
 }
 
@@ -56,4 +60,16 @@ func (c *Client) WithColor(color chess.PieceColor) *Client {
 func (c *Client) WithRole(role Role) *Client {
 	c.Role = role
 	return c
+}
+
+func (c *Client) WriteJSON(v any) error {
+	c.WriteMtx.Lock()
+	defer c.WriteMtx.Unlock()
+	return c.Conn.WriteJSON(v)
+}
+
+func (c *Client) WritePing() error {
+	c.WriteMtx.Lock()
+	defer c.WriteMtx.Unlock()
+	return c.Conn.WriteMessage(websocket.PingMessage, nil)
 }

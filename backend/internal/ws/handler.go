@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/ws/parser"
 	"github.com/alexbsec/AustralianChess/backend/rooms"
@@ -113,7 +114,7 @@ func (h *Handler) HandleRoom(ctx *gin.Context) {
 	}()
 
 	log.Printf("client connected to room %s with playerId %s", roomId, playerId)
-	if err := conn.WriteJSON(GameStateMessage{
+	if err := client.WriteJSON(GameStateMessage{
 		Type:        "game_state",
 		GameState:   *room.GameState,
 		PlayerColor: client.Color,
@@ -143,59 +144,73 @@ func (h *Handler) HandleRoom(ctx *gin.Context) {
 }
 
 func (h *Handler) loop(ctx context.Context, roomId string, client *Client) {
-	for {
-		_, data, err := client.Conn.ReadMessage()
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
-			}
-			log.Printf("failed to read message: %v, data: %v", err, data)
-			return
-		}
+	go keepAlivePong(ctx, client)
+    for {
+        _, data, err := client.Conn.ReadMessage()
+        if err != nil {
+            if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+                log.Printf("error: %v", err)
+            }
+            log.Printf("failed to read message: %v, data: %v", err, data)
+            return
+        }
 
-		if client.Role == Spectator {
-			if err := client.Conn.WriteJSON(ErrorMessage{
-				Type:    "error",
-				Message: "spectators cannot send commands",
-			}); err != nil {
-				log.Printf("failed to write spectator error: %v", err)
-				return
-			}
-			continue
-		}
+        if client.Role == Spectator {
+            if err := client.WriteJSON(ErrorMessage{Type: "error", Message: "spectators cannot send commands"}); err != nil {
+                log.Printf("failed to write spectator error: %v", err)
+                return
+            }
+            continue
+        }
 
-		cmd, err := h.wsParser.ParseMessage(roomId, data)
-		if err != nil {
-			log.Printf("failed to parse message: %v", err)
-			if err := client.Conn.WriteJSON(ErrorMessage{
-				Type:    "error",
-				Message: err.Error(),
-			}); err != nil {
-				log.Printf("failed to write parse error: %v", err)
-				return
-			}
-			continue
-		}
+        cmd, err := h.wsParser.ParseMessage(roomId, data)
+        if err != nil {
+            log.Printf("failed to parse message: %v", err)
+            if err := client.WriteJSON(ErrorMessage{Type: "error", Message: err.Error()}); err != nil {
+                log.Printf("failed to write parse error: %v", err)
+                return
+            }
+            continue
+        }
 
-		cmd = cmd.SetPlayerId(client.PlayerId)
-		cmd = cmd.SetColor(*client.Color)
+        cmd = cmd.SetPlayerId(client.PlayerId)
+        cmd = cmd.SetColor(*client.Color)
 
-		result, err := h.roomService.ExecuteCommand(ctx, cmd)
-		if err != nil {
-			log.Printf("failed to execute command: %v", err)
-			if err := client.Conn.WriteJSON(ErrorMessage{
-				Type:    "error",
-				Message: err.Error(),
-			}); err != nil {
-				log.Printf("failed to write execute error: %v", err)
-				return
-			}
-			continue
-		}
+        result, err := h.roomService.ExecuteCommand(ctx, cmd)
+        if err != nil {
+            log.Printf("failed to execute command: %v", err)
+            if err := client.WriteJSON(ErrorMessage{Type: "error", Message: err.Error()}); err != nil {
+                log.Printf("failed to write execute error: %v", err)
+                return
+            }
+            continue
+        }
 
-		if err := h.hub.Broadcast(roomId, result); err != nil {
-			log.Printf("failed to broadcast response: %v", err)
-			return
-		}
-	}
+        if err := h.hub.Broadcast(roomId, result); err != nil {
+            log.Printf("failed to broadcast response: %v", err)
+            return
+        }
+    }
+}
+
+func keepAlivePong(ctx context.Context, client *Client) {
+    ticker := time.NewTicker(20 * time.Second)
+    defer ticker.Stop()
+    for {
+        select {
+        case <-ticker.C:
+            log.Printf("sending ping to client %s", client.PlayerId)
+            if err := client.WritePing(); err != nil {
+                log.Printf("ping failed for client %s: %v", client.PlayerId, err)
+                return
+            }
+            log.Printf("ping sent to client %s", client.PlayerId)
+        case <-client.Done:
+            log.Printf("keepalive stopped for client %s (done)", client.PlayerId)
+            return
+        case <-ctx.Done():
+            log.Printf("keepalive stopped for client %s (ctx)", client.PlayerId)
+            return
+        }
+    }
 }
