@@ -24,6 +24,7 @@ export class RoomController {
     private draggedElement: HTMLElement | null = null;
     private audioUnlocked: boolean = false;
     private isTouchingBoard: boolean = false;
+    private warningInterval: ReturnType<typeof setInterval> | null = null;
     private dragWidth: number = 0;
     private dragHeight: number = 0;
 
@@ -46,6 +47,9 @@ export class RoomController {
                     this.playCorrectSound(state);
                 }
                 this.handleMoveResult(promoted, state);
+            },
+            onInactivityWarning: (seconds) => {
+                this.handleInactivityWarning(seconds);
             },
             onOpen: () => {
                 this.view.updateStatus(
@@ -172,6 +176,25 @@ export class RoomController {
         });
     }
 
+    private handleInactivityWarning(seconds: number): void {
+        if (this.warningInterval) {
+            clearInterval(this.warningInterval);
+        }
+
+        let remaining = seconds;
+        this.view.showInactivityWarning(remaining);
+        this.warningInterval = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(this.warningInterval!);
+                this.warningInterval = null;
+                this.view.hideInactivityWarning();
+            } else {
+                this.view.showInactivityWarning(remaining);
+            }
+        }, 1000);
+    }
+
     private handleGameState(state: GameState, color?: PieceColor): void {
         const isSubsequentMove = this.state.gameState !== null;
         const oldTurn = this.state.gameState?.turn;
@@ -209,8 +232,13 @@ export class RoomController {
         const wasMyMove = this.state.movePending;
 
         if (moved && oldState && !wasMyMove) {
-            // opponent's move — detect from diff
             this.state.uiState.lastMove = this.detectLastMove(oldState, state);
+        }
+
+        if (moved && this.warningInterval) {
+            clearInterval(this.warningInterval);
+            this.warningInterval = null;
+            this.view.hideInactivityWarning();
         }
 
         this.state.updateGameState(state);
@@ -267,7 +295,7 @@ export class RoomController {
 
 
             const rect = pieceImg.getBoundingClientRect();
-            this.dragWidth = rect.width || 40;   
+            this.dragWidth = rect.width || 40;
             this.dragHeight = rect.height || 40;
 
             this.draggedElement = pieceImg.cloneNode(true) as HTMLElement;

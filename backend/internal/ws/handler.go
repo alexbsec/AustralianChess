@@ -133,7 +133,7 @@ func (h *Handler) HandleRoom(ctx *gin.Context) {
 		}
 
 		log.Printf("broadcasting player joining room %s as %s", roomId, client.Role)
-		if err := h.hub.Broadcast(roomId, result); err != nil {
+		if err := h.hub.Broadcast(roomId, result, true); err != nil {
 			log.Printf("failed to broadcast player joining room: %v", err)
 			return
 		}
@@ -186,7 +186,7 @@ func (h *Handler) loop(ctx context.Context, roomId string, client *Client) {
             continue
         }
 
-        if err := h.hub.Broadcast(roomId, result); err != nil {
+        if err := h.hub.Broadcast(roomId, result, true); err != nil {
             log.Printf("failed to broadcast response: %v", err)
             return
         }

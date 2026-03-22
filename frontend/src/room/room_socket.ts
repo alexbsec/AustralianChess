@@ -5,13 +5,14 @@ import type {
     Position,
 } from "../engine/types";
 import type { WsMessage } from "../ws/types";
-import { buildRoomWsUrl, isGameStateMessage, isMoveResultMessage, isPromotionResultMessage, isRoomStatusMessage } from "../ws/utils";
+import { buildRoomWsUrl, isGameStateMessage, isInactivityWarningMessage, isMoveResultMessage, isPromotionResultMessage, isRoomStatusMessage } from "../ws/utils";
 
 export type SocketHandlers = {
     onGameState: (state: GameState, playerColor?: PieceColor) => void;
     onRoomStatus: (success: boolean, gameStarted: boolean) => void;
     onMoveResult: (moved: boolean, state: GameState) => void;
     onPromoteResult: (promoted: boolean, state: GameState) => void;
+    onInactivityWarning: (seconds: number) => void;
     onOpen: () => void;
     onError: (event: Event) => void;
     onClose: () => void;
@@ -55,6 +56,8 @@ export class RoomSocket {
                 this.handlers.onMoveResult(message.moved, message.game_state);
             } else if (isPromotionResultMessage(message)) {
                 this.handlers.onPromoteResult(message.promoted, message.game_state);
+            } else if (isInactivityWarningMessage(message)) {
+                this.handlers.onInactivityWarning(message.seconds);
             }
         } catch (error) {
             console.error("Failed to parse websocket payload:", error);

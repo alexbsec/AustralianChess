@@ -7,5 +7,5 @@ type IHub interface {
 	SetOnRoomEmptyCallback(callback func(roomId string))
 	AddClient(roomId, playerId string, conn *websocket.Conn) (*Client, error)
 	RemoveClient(roomId string, conn *websocket.Conn)
-	Broadcast(roomId string, msg any) error
+	Broadcast(roomId string, msg any, resetWarning bool) error
 }

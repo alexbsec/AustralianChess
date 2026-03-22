@@ -24,7 +24,7 @@ func NewHub() *Hub {
 
 func (h *Hub) StartJanitor() {
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -141,7 +141,7 @@ func (h *Hub) RemoveClient(roomId string, conn *websocket.Conn) {
 	log.Printf("client disconnected")
 }
 
-func (h *Hub) Broadcast(roomId string, message any) error {
+func (h *Hub) Broadcast(roomId string, message any, resetWarning bool) error {
     h.mtx.Lock()
     room, ok := h.roomClients[roomId]
     if !ok {
@@ -149,6 +149,11 @@ func (h *Hub) Broadcast(roomId string, message any) error {
         return nil
     }
     room.LastActive = time.Now()
+
+	if resetWarning {
+		room.WarningSent = false
+	}
+
     clients := make([]*Client, 0, 2+len(room.Spectators))
     if room.PlayerOne != nil && room.PlayerOne.Conn != nil {
         clients = append(clients, room.PlayerOne)
@@ -173,17 +178,29 @@ func (h *Hub) cleanupRooms() {
 	h.mtx.Lock()
 
 	var deleted []string
+	var warned []string
 
 	for id, room := range h.roomClients {
-		if time.Since(room.LastActive) < 5*time.Minute {
-			continue
+		inactiveSince := time.Since(room.LastActive)
+		maxTimeMin := 7 * time.Minute
+		warnAt := 6 * time.Minute + 30 * time.Second
+
+		if inactiveSince >= maxTimeMin {
+			delete(h.roomClients, id)
+			deleted = append(deleted, id)
+		} else if inactiveSince >= warnAt && !room.WarningSent {
+			room.WarningSent = true
+			warned = append(warned, id)
 		}
-
-		delete(h.roomClients, id)
-		deleted = append(deleted, id)
 	}
-
 	h.mtx.Unlock()
+
+	for _, id := range warned {
+		h.Broadcast(id, map[string]any{
+			"type": "inactive_warning",
+			"seconds": 30,
+		}, false)
+	}
 
 	if h.onRoomEmpty == nil {
 		return

@@ -31,6 +31,7 @@ type RoomClient struct {
 	PlayerTwo  *Client
 	Spectators map[*websocket.Conn]*Client
 	LastActive time.Time
+	WarningSent   bool
 }
 
 func NewRoomClient() *RoomClient {
@@ -43,7 +44,7 @@ func NewClient(roomId string, conn *websocket.Conn) *Client {
 	return &Client{
 		Conn:   conn,
 		RoomId: roomId,
-		Done: make(chan struct{}),
+		Done:   make(chan struct{}),
 	}
 }
 

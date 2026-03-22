@@ -79,6 +79,34 @@ export class RoomView {
         `;
     }
 
+    public showInactivityWarning(seconds: number): void {
+        let banner = document.getElementById("inactivity-warning");
+        if (!banner) {
+            banner = document.createElement("div");
+            banner.id = "inactivity-warning";
+            Object.assign(banner.style, {
+                position: "fixed",
+                bottom: "24px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#b45309",
+                color: "white",
+                padding: "12px 24px",
+                borderRadius: "8px",
+                fontWeight: "600",
+                zIndex: "9999",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                whiteSpace: "nowrap",
+            });
+            document.body.appendChild(banner);
+        }
+        banner.textContent = `A move happen! Room closes in ${seconds}s`;
+    }
+
+    public hideInactivityWarning(): void {
+        document.getElementById("inactivity-warning")?.remove();
+    }
+
     public showGameOverModal(reason: string, onNewGame: () => void): void {
         if (document.getElementById("game-over-modal")) return;
 

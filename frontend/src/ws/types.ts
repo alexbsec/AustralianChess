@@ -25,4 +25,8 @@ export type PromoteResultMessage = {
     game_state: GameState;
 };
 
-export type WsMessage = GameStateMessage | RoomStatusMessage | MoveResultMessage | PromoteResultMessage;
+export type InactivityWarningMessage = {
+    seconds: number;
+};
+
+export type WsMessage = GameStateMessage | RoomStatusMessage | MoveResultMessage | PromoteResultMessage | InactivityWarningMessage;
