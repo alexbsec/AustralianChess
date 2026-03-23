@@ -2,6 +2,8 @@
 
 A multiplayer, real-time chess variant played on an expanded **12x12 board**, featuring custom pieces with unique movement rules. Built with a high-performance Go backend and a modern TypeScript frontend, coordinated via WebSockets for seamless gameplay.
 
+**Play it live at [ausschess.com](https://ausschess.com)**
+
 ---
 
 ## Screenshot
