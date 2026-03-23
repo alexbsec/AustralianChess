@@ -35,7 +35,7 @@ jobs:
 
 
       - name: Run tests
-        run: go test ./... -covermode=atomic -coverprofile=backend/cover.out
+        run: go test ./... -covermode=atomic -coverprofile=cover.out
 
 
       - name: Check coverage
