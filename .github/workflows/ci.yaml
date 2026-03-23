@@ -13,6 +13,10 @@ jobs:
       contents: read
       packages: write
 
+    defaults:
+      run:
+        working-directory: ./backend   
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,12 +30,10 @@ jobs:
         run: go mod download
 
       - name: Run tests
-        run: |
-          go test ./... -coverprofile=coverage.out
+        run: go test ./... -coverprofile=coverage.out
 
       - name: Filter coverage (remove mocks)
-        run: |
-          grep -v "mock_" coverage.out > coverage_filtered.out
+        run: grep -v "mock_" coverage.out > coverage_filtered.out
 
       - name: Check coverage threshold
         run: |
@@ -50,14 +52,17 @@ jobs:
           }'
 
       - name: Login to GHCR
+        working-directory: .
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build Docker image
+        working-directory: .
         run: |
           IMAGE=ghcr.io/${{ github.repository }}:latest
           docker build -t $IMAGE .
 
       - name: Push Docker image
+        working-directory: .
         run: |
           IMAGE=ghcr.io/${{ github.repository }}:latest
           docker push $IMAGE
