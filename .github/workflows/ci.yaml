@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22
+
+      - name: Install deps
+        run: go mod download
+
+      - name: Run tests
+        run: |
+          go test ./... -coverprofile=coverage.out
+
+      - name: Filter coverage (remove mocks)
+        run: |
+          grep -v "mock_" coverage.out > coverage_filtered.out
+
+      - name: Check coverage threshold
+        run: |
+          total=$(go tool cover -func=coverage_filtered.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total coverage: $total%"
+
+          threshold=80.0
+
+          awk -v total="$total" -v threshold="$threshold" 'BEGIN {
+            if (total < threshold) {
+              printf("Coverage %.2f%% is below threshold %.2f%%\n", total, threshold)
+              exit 1
+            } else {
+              printf("Coverage OK: %.2f%% >= %.2f%%\n", total, threshold)
+            }
+          }'
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Docker image
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}:latest
+          docker build -t $IMAGE .
+
+      - name: Push Docker image
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}:latest
+          docker push $IMAGE
