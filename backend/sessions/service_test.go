@@ -1,10 +1,12 @@
-package sessions
+package sessions_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/alexbsec/AustralianChess/backend/sessions"
+	"github.com/alexbsec/AustralianChess/backend/sessions/mocks"
 	"github.com/golang/mock/gomock"
 )
 
@@ -12,17 +14,17 @@ func TestCreateSession_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := NewMockRepository(ctrl)
+	mockRepo := mocks.NewMockRepository(ctrl)
 
 	mockRepo.
 		EXPECT().
 		NewSession(gomock.Any(), int64(123), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, userId int64, token string) (*Session, error) {
+		DoAndReturn(func(ctx context.Context, userId int64, token string) (*sessions.Session, error) {
 			if token == "" {
 				t.Fatal("expected token to be generated")
 			}
 
-			return &Session{
+			return &sessions.Session{
 				Id:           1,
 				UserId:       userId,
 				SessionToken: token,
@@ -32,7 +34,7 @@ func TestCreateSession_Success(t *testing.T) {
 			}, nil
 		})
 
-	svc := NewService(mockRepo)
+	svc := sessions.NewService(mockRepo)
 
 	session, err := svc.CreateSession(context.Background(), 123)
 
@@ -54,12 +56,12 @@ func TestValidateSession_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := NewMockRepository(ctrl)
+	mockRepo := mocks.NewMockRepository(ctrl)
 
 	mockRepo.
 		EXPECT().
 		GetSessionByToken(gomock.Any(), "token").
-		Return(&Session{
+		Return(&sessions.Session{
 			Id:           1,
 			UserId:       123,
 			SessionToken: "token",
@@ -67,7 +69,7 @@ func TestValidateSession_Valid(t *testing.T) {
 			RevokedAt:    nil,
 		}, nil)
 
-	svc := NewService(mockRepo)
+	svc := sessions.NewService(mockRepo)
 
 	session, valid, err := svc.ValidateSession(context.Background(), "token")
 
@@ -89,18 +91,18 @@ func TestValidateSession_Expired(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := NewMockRepository(ctrl)
+	mockRepo := mocks.NewMockRepository(ctrl)
 
 	mockRepo.
 		EXPECT().
 		GetSessionByToken(gomock.Any(), "token").
-		Return(&Session{
+		Return(&sessions.Session{
 			Id:           1,
 			SessionToken: "token",
 			ExpiresAt:    time.Now().Add(-time.Hour),
 		}, nil)
 
-	svc := NewService(mockRepo)
+	svc := sessions.NewService(mockRepo)
 
 	_, valid, err := svc.ValidateSession(context.Background(), "token")
 
@@ -118,21 +120,21 @@ func TestValidateSession_Revoked(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := NewMockRepository(ctrl)
+	mockRepo := mocks.NewMockRepository(ctrl)
 
 	now := time.Now()
 
 	mockRepo.
 		EXPECT().
 		GetSessionByToken(gomock.Any(), "token").
-		Return(&Session{
+		Return(&sessions.Session{
 			Id:           1,
 			SessionToken: "token",
 			ExpiresAt:    time.Now().Add(time.Hour),
 			RevokedAt:    &now,
 		}, nil)
 
-	svc := NewService(mockRepo)
+	svc := sessions.NewService(mockRepo)
 
 	_, valid, err := svc.ValidateSession(context.Background(), "token")
 
@@ -150,12 +152,12 @@ func TestRevokeSession_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockRepo := NewMockRepository(ctrl)
+	mockRepo := mocks.NewMockRepository(ctrl)
 
 	mockRepo.
 		EXPECT().
 		GetSessionByToken(gomock.Any(), "token").
-		Return(&Session{
+		Return(&sessions.Session{
 			Id:           1,
 			SessionToken: "token",
 			ExpiresAt:    time.Now().Add(time.Hour),
@@ -166,7 +168,7 @@ func TestRevokeSession_Success(t *testing.T) {
 		DestroySession(gomock.Any(), int64(1)).
 		Return(nil)
 
-	svc := NewService(mockRepo)
+	svc := sessions.NewService(mockRepo)
 
 	err := svc.RevokeSession(context.Background(), "token")
 

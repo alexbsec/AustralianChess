@@ -29,15 +29,14 @@ jobs:
       - name: Install deps
         run: go mod download
 
-      - name: Run tests
-        run: go test ./... -coverprofile=coverage.out
-
-      - name: Filter coverage (remove mocks)
-        run: grep -v "mock_" coverage.out > coverage_filtered.out
+      - name: Run tests (exclude mocks)
+        run: |
+          PKGS=$(go list ./... | grep -v /mocks/)
+          go test $PKGS -covermode=atomic -coverprofile=coverage.out
 
       - name: Check coverage threshold
         run: |
-          total=$(go tool cover -func=coverage_filtered.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          total=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: $total%"
 
           threshold=80.0
