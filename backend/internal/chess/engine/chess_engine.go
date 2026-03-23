@@ -17,6 +17,12 @@ func NewChessEngine() *ChessEngine {
 	}
 }
 
+func NewChessEngineWithArbiter(arbiter Arbiter) *ChessEngine {
+	return &ChessEngine{
+		arbiter: arbiter,
+	}
+}
+
 func (ce *ChessEngine) GameResult(gameState *chess.GameState, turnColor chess.PieceColor) *chess.GameResult {
 	if gameState == nil {
 		return nil
