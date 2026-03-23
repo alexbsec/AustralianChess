@@ -29,35 +29,20 @@ jobs:
       - name: Install deps
         run: go mod download
 
-
       - name: Install go-test-coverage
         run: go install github.com/vladopajic/go-test-coverage/v2@latest
 
+      - name: Build
+        run: go build ./...
 
       - name: Run tests
         run: go test ./... -covermode=atomic -coverprofile=cover.out
 
-
       - name: Check coverage
-        run: |
-          $(go env GOPATH)/bin/go-test-coverage --config=./.testcoverage.yml
+        run: $(go env GOPATH)/bin/go-test-coverage --config=./.testcoverage.yml
 
-
-      - name: Check coverage threshold
-        run: |
-          total=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
-          echo "Total coverage: $total%"
-
-          threshold=80.0
-
-          awk -v total="$total" -v threshold="$threshold" 'BEGIN {
-            if (total < threshold) {
-              printf("Coverage %.2f%% is below threshold %.2f%%\n", total, threshold)
-              exit 1
-            } else {
-              printf("Coverage OK: %.2f%% >= %.2f%%\n", total, threshold)
-            }
-          }'
+      - name: Show coverage total
+        run: go tool cover -func=cover.out | grep total
 
       - name: Login to GHCR
         working-directory: .
