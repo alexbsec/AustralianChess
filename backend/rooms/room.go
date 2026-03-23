@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
-	"github.com/alexbsec/AustralianChess/backend/internal/ws/parser"
+	"github.com/alexbsec/AustralianChess/backend/internal/contracts"
 )
 
 type IService interface {
@@ -13,6 +13,6 @@ type IService interface {
 	FetchRoom(ctx context.Context, roomId string) (*Room, error)
 	DeleteRoom(ctx context.Context, roomId string) error
 
-	ExecuteCommand(ctx context.Context, cmd parser.Command) (parser.Result, error)
-	UpdatePlayerJoined(ctx context.Context, roomId, playerId string, color chess.PieceColor) (parser.Result, error)
+	ExecuteCommand(ctx context.Context, cmd contracts.Command) (contracts.Result, error)
+	UpdatePlayerJoined(ctx context.Context, roomId, playerId string, color chess.PieceColor) (contracts.Result, error)
 }
