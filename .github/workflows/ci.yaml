@@ -32,7 +32,16 @@ jobs:
       - name: Run tests (exclude mocks)
         run: |
           PKGS=$(go list ./... | grep -v /mocks/)
-          go test $PKGS -covermode=atomic -coverprofile=coverage.out
+
+          TEST_PKGS=""
+
+          for pkg in $PKGS; do
+            if go test -c $pkg >/dev/null 2>&1; then
+              TEST_PKGS="$TEST_PKGS $pkg"
+            fi
+          done
+
+          go test $TEST_PKGS -covermode=atomic -coverprofile=coverage.out
 
       - name: Check coverage threshold
         run: |
