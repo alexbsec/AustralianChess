@@ -86,6 +86,10 @@ func (b Board) GetPiece(position Position) *Piece {
 	return square.Piece
 }
 
+func (b *Board) AddPiece(piece *Piece, position Position) {
+	b.Data[position.Row][position.Col].Piece = piece
+}
+
 func (b *Board) MovePiece(fromPos Position, toPos Position) error {
 	piece := b.GetPiece(fromPos)
 	if piece == nil {

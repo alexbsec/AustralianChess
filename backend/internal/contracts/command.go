@@ -1,4 +1,4 @@
-package parser
+package contracts
 
 import (
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"

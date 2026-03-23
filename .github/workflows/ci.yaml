@@ -17,6 +17,24 @@ jobs:
       run:
         working-directory: ./backend   
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,8 +47,15 @@ jobs:
       - name: Install deps
         run: go mod download
 
+      - name: Install Goose
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
+
       - name: Install go-test-coverage
         run: go install github.com/vladopajic/go-test-coverage/v2@latest
+
+      - name: Run migrations
+        run: |
+          $(go env GOPATH)/bin/goose -dir ./migrations postgres "$DATABASE_URL" up
 
       - name: Run tests
         run: go test ./... -covermode=atomic -coverprofile=cover.out
@@ -40,19 +65,3 @@ jobs:
 
       - name: Show coverage total
         run: go tool cover -func=cover.out | grep total
-
-      - name: Login to GHCR
-        working-directory: .
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Build Docker image
-        working-directory: .
-        run: |
-          IMAGE=ghcr.io/${{ github.repository }}:latest
-          docker build -t $IMAGE .
-
-      - name: Push Docker image
-        working-directory: .
-        run: |
-          IMAGE=ghcr.io/${{ github.repository }}:latest
-          docker push $IMAGE

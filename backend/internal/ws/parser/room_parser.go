@@ -3,6 +3,8 @@ package parser
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/alexbsec/AustralianChess/backend/internal/contracts"
 )
 
 type RoomParser struct {
@@ -12,7 +14,7 @@ func NewRoomParser() *RoomParser {
 	return &RoomParser{}
 }
 
-func (d *RoomParser) ParseMessage(roomId string, rawMsg []byte) (Command, error) {
+func (d *RoomParser) ParseMessage(roomId string, rawMsg []byte) (contracts.Command, error) {
 	var envelope Envelope
 	if err := json.Unmarshal(rawMsg, &envelope); err != nil {
 		return nil, err
@@ -28,13 +30,13 @@ func (d *RoomParser) ParseMessage(roomId string, rawMsg []byte) (Command, error)
 	}
 }
 
-func (d *RoomParser) parsePromoteCommand(roomId string, rawMsg []byte) (Command, error) {
+func (d *RoomParser) parsePromoteCommand(roomId string, rawMsg []byte) (contracts.Command, error) {
 	var msg PromotePawnMessage
 	if err := json.Unmarshal(rawMsg, &msg); err != nil {
 		return nil, err
 	}
 
-	promoteCmd := PromoteCommand{
+	promoteCmd := contracts.PromoteCommand{
 		RoomId:         roomId,
 		RequesteeColor: msg.RequesteeColor,
 		PromoteTo:      msg.PromoteTo,
@@ -45,13 +47,13 @@ func (d *RoomParser) parsePromoteCommand(roomId string, rawMsg []byte) (Command,
 	return promoteCmd, nil
 }
 
-func (d *RoomParser) parseMakeMoveCommand(roomId string, rawMsg []byte) (Command, error) {
+func (d *RoomParser) parseMakeMoveCommand(roomId string, rawMsg []byte) (contracts.Command, error) {
 	var msg MovePieceMessage
 	if err := json.Unmarshal(rawMsg, &msg); err != nil {
 		return nil, err
 	}
 
-	moveCmd := MoveCommand{
+	moveCmd := contracts.MoveCommand{
 		RoomId:         roomId,
 		RequesteeColor: msg.RequesteeColor,
 		FromPos:        msg.FromPos,

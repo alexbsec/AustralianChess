@@ -10,7 +10,7 @@ import (
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 	"github.com/alexbsec/AustralianChess/backend/internal/chess/engine"
-	"github.com/alexbsec/AustralianChess/backend/internal/ws/parser"
+	"github.com/alexbsec/AustralianChess/backend/internal/contracts"
 	"github.com/google/uuid"
 )
 
@@ -24,6 +24,13 @@ func NewService() *Service {
 	return &Service{
 		rooms:       make(map[string]*Room),
 		chessEngine: engine.NewChessEngine(),
+	}
+}
+
+func NewServiceWithEngine(chessEngine engine.Engine) *Service {
+	return &Service{
+		rooms: make(map[string]*Room),
+		chessEngine: chessEngine,
 	}
 }
 
@@ -92,7 +99,7 @@ func (s *Service) DeleteRoom(ctx context.Context, roomId string) error {
 	return nil
 }
 
-func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parser.Result, error) {
+func (s *Service) ExecuteCommand(ctx context.Context, cmd contracts.Command) (contracts.Result, error) {
 	if cmd == nil {
 		return nil, errors.New("cannot execute nil command")
 	}
@@ -103,25 +110,25 @@ func (s *Service) ExecuteCommand(ctx context.Context, cmd parser.Command) (parse
 	}
 
 	if !room.GameStarted {
-		return parser.FailedCommandResult{
+		return contracts.FailedCommandResult{
 			GameStarted: room.GameStarted,
 		}, nil
 	}
 
 	switch cmd.(type) {
-	case parser.MoveCommand:
-		moveCmd := cmd.(parser.MoveCommand)
+	case contracts.MoveCommand:
+		moveCmd := cmd.(contracts.MoveCommand)
 		return s.handleMoveCommand(ctx, room, moveCmd)
-	case parser.PromoteCommand:
-		promoteCmd := cmd.(parser.PromoteCommand)
+	case contracts.PromoteCommand:
+		promoteCmd := cmd.(contracts.PromoteCommand)
 		return s.handlePromoteCommand(ctx, room, promoteCmd)
 	default:
 		return nil, errors.New("unknown command")
 	}
 }
 
-func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId string, color chess.PieceColor) (parser.Result, error) {
-	joinResult := parser.PlayerJoinedResult{
+func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId string, color chess.PieceColor) (contracts.Result, error) {
+	joinResult := contracts.PlayerJoinedResult{
 		RoomId:      roomId,
 		PlayerId:    playerId,
 		Success:     false,
@@ -148,8 +155,8 @@ func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId strin
 	return joinResult, nil
 }
 
-func (s *Service) handlePromoteCommand(ctx context.Context, room *Room, cmd parser.PromoteCommand) (parser.Result, error) {
-	result := parser.PromotionResult{
+func (s *Service) handlePromoteCommand(ctx context.Context, room *Room, cmd contracts.PromoteCommand) (contracts.Result, error) {
+	result := contracts.PromotionResult{
 		RoomId: cmd.RoomId,
 		Promoted: false,
 		GameState: *room.GameState,
@@ -172,8 +179,8 @@ func (s *Service) handlePromoteCommand(ctx context.Context, room *Room, cmd pars
 	return result, nil	
 }
 
-func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd parser.MoveCommand) (parser.Result, error) {
-	result := parser.MoveResult{
+func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd contracts.MoveCommand) (contracts.Result, error) {
+	result := contracts.MoveResult{
 		RoomId:    cmd.RoomId,
 		Moved:     false,
 		GameState: *room.GameState,
