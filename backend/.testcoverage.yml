@@ -9,4 +9,3 @@ exclude:
   paths:
     - /mocks/
     - /cmd/
-    - /internal/
