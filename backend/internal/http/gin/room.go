@@ -17,7 +17,9 @@ func RoomHandler(
 ) {
 	routerGroup.Handle("GET", "/create", MakeNewRoom(roomService))
 	routerGroup.Handle("GET", "/:id", ServeRoom(roomService))
-	routerGroup.Handle("GET", "/ws/:id", wsHandler.HandleRoom)
+	if wsHandler != nil {
+		routerGroup.Handle("GET", "/ws/:id", wsHandler.HandleRoom)
+	}
 }
 
 func MakeNewRoom(roomService rooms.IService) gin.HandlerFunc {
