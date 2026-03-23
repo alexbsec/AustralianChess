@@ -1,5 +1,9 @@
 .git/
 backend/.env
+backend/cover.out
 backend/coverage.out
+
+cover.out
+coverage.out
 
 .env
