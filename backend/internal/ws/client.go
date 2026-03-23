@@ -17,7 +17,7 @@ const (
 )
 
 type Client struct {
-	Conn     *websocket.Conn
+	Conn     Conn
 	RoomId   string
 	PlayerId string
 	Color    *chess.PieceColor
@@ -29,18 +29,18 @@ type Client struct {
 type RoomClient struct {
 	PlayerOne  *Client
 	PlayerTwo  *Client
-	Spectators map[*websocket.Conn]*Client
+	Spectators map[Conn]*Client
 	LastActive time.Time
 	WarningSent   bool
 }
 
 func NewRoomClient() *RoomClient {
 	return &RoomClient{
-		Spectators: make(map[*websocket.Conn]*Client),
+		Spectators: make(map[Conn]*Client),
 	}
 }
 
-func NewClient(roomId string, conn *websocket.Conn) *Client {
+func NewClient(roomId string, conn Conn) *Client {
 	return &Client{
 		Conn:   conn,
 		RoomId: roomId,

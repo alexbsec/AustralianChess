@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
-	"github.com/gorilla/websocket"
 )
 
 type Hub struct {
@@ -37,7 +36,7 @@ func (h *Hub) SetOnRoomEmptyCallback(callback func(roomId string)) {
 	h.onRoomEmpty = callback
 }
 
-func (h *Hub) AddClient(roomId, playerId string, conn *websocket.Conn) (*Client, error) {
+func (h *Hub) AddClient(roomId, playerId string, conn Conn) (*Client, error) {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 
@@ -115,7 +114,7 @@ func (h *Hub) AddClient(roomId, playerId string, conn *websocket.Conn) (*Client,
 	return client, nil
 }
 
-func (h *Hub) RemoveClient(roomId string, conn *websocket.Conn) {
+func (h *Hub) RemoveClient(roomId string, conn Conn) {
 	h.mtx.Lock()
 
 	room, ok := h.roomClients[roomId]
@@ -174,6 +173,10 @@ func (h *Hub) Broadcast(roomId string, message any, resetWarning bool) error {
     return nil
 }
 
+func (h *Hub) SetRoomForTest(roomId string, roomClient *RoomClient) {
+	h.addRoomForTest(roomId, roomClient)
+}
+
 func (h *Hub) cleanupRooms() {
 	h.mtx.Lock()
 
@@ -210,4 +213,10 @@ func (h *Hub) cleanupRooms() {
 		h.onRoomEmpty(id)
 		log.Printf("room %s cleaned up by janitor", id)
 	}
+}
+
+func (h *Hub) addRoomForTest(roomId string, room *RoomClient) {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
+	h.roomClients[roomId] = room
 }
