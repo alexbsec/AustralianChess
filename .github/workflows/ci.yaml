@@ -29,19 +29,27 @@ jobs:
       - name: Install deps
         run: go mod download
 
-      - name: Run tests (exclude mocks)
+
+      - name: Install go-test-coverage
+        run: go install github.com/vladopajic/go-test-coverage/v2@latest
+
+      - name: Run tests (filtered packages)
         run: |
-          PKGS=$(go list ./... | grep -v /mocks/)
-
-          TEST_PKGS=""
-
-          for pkg in $PKGS; do
-            if go test -c $pkg >/dev/null 2>&1; then
-              TEST_PKGS="$TEST_PKGS $pkg"
+          PKGS=$(go list ./... | grep -v /mocks/ | while read pkg; do
+            if [ -n "$(go list -f '{{.TestGoFiles}} {{.XTestGoFiles}}' $pkg)" ]; then
+              echo $pkg
             fi
-          done
+          done)
 
-          go test $TEST_PKGS -covermode=atomic -coverprofile=coverage.out
+          echo "Testing packages:"
+          echo "$PKGS"
+
+          go test $PKGS -covermode=atomic -coverprofile=cover.out
+
+      - name: Check coverage
+        run: |
+          $(go env GOPATH)/bin/go-test-coverage --config=./.testcoverage.yml
+
 
       - name: Check coverage threshold
         run: |
