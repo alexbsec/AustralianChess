@@ -15,6 +15,8 @@ coverage:
 test-complete:
 	go test ./... -coverprofile=coverage.out && go tool cover -html=coverage.out
 
+export DATABASE_URL = postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
+
 test-db:
 	@if docker ps -a --format '{{.Names}}' | grep -q '^test-postgres$$'; then \
 		docker start test-postgres; \
