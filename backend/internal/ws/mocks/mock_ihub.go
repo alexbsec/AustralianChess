@@ -63,6 +63,20 @@ func (mr *MockIHubMockRecorder) Broadcast(arg0, arg1, arg2 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Broadcast", reflect.TypeOf((*MockIHub)(nil).Broadcast), arg0, arg1, arg2)
 }
 
+// GetRoomForTest mocks base method.
+func (m *MockIHub) GetRoomForTest(arg0 string) *ws.RoomClient {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRoomForTest", arg0)
+	ret0, _ := ret[0].(*ws.RoomClient)
+	return ret0
+}
+
+// GetRoomForTest indicates an expected call of GetRoomForTest.
+func (mr *MockIHubMockRecorder) GetRoomForTest(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoomForTest", reflect.TypeOf((*MockIHub)(nil).GetRoomForTest), arg0)
+}
+
 // RemoveClient mocks base method.
 func (m *MockIHub) RemoveClient(arg0 string, arg1 ws.Conn) {
 	m.ctrl.T.Helper()

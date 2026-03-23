@@ -177,6 +177,17 @@ func (h *Hub) SetRoomForTest(roomId string, roomClient *RoomClient) {
 	h.addRoomForTest(roomId, roomClient)
 }
 
+func (h *Hub) GetRoomForTest(roomId string) *RoomClient {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
+	room, ok := h.roomClients[roomId]
+	if !ok {
+		return nil
+	}
+
+	return room
+}
+
 func (h *Hub) cleanupRooms() {
 	h.mtx.Lock()
 

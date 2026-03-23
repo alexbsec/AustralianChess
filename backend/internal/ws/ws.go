@@ -11,6 +11,7 @@ type IHub interface {
 	RemoveClient(roomId string, conn Conn)
 	Broadcast(roomId string, msg any, resetWarning bool) error
 	SetRoomForTest(roomId string, roomClient *RoomClient)
+	GetRoomForTest(roomId string) *RoomClient
 }
 
 type Conn interface {
