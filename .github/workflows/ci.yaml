@@ -33,18 +33,10 @@ jobs:
       - name: Install go-test-coverage
         run: go install github.com/vladopajic/go-test-coverage/v2@latest
 
-      - name: Run tests (filtered packages)
-        run: |
-          PKGS=$(go list ./... | grep -v /mocks/ | while read pkg; do
-            if [ -n "$(go list -f '{{.TestGoFiles}} {{.XTestGoFiles}}' $pkg)" ]; then
-              echo $pkg
-            fi
-          done)
 
-          echo "Testing packages:"
-          echo "$PKGS"
+      - name: Run tests
+        run: go test ./... -covermode=atomic -coverprofile=backend/cover.out
 
-          go test $PKGS -covermode=atomic -coverprofile=cover.out
 
       - name: Check coverage
         run: |
