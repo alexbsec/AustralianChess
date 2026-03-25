@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
@@ -127,7 +126,6 @@ func (ce *ChessEngine) PromotePawn(gameState *chess.GameState, requesteeColor ch
 	}
 
 
-	log.Printf("pawnPos: %v, destPos: %v", pawnPos, destPos)
 	canMove, feedback := ce.arbiter.CanMovePiece(gameState.Board, *piece, pawnPos, destPos)
 	if !canMove {
 		return ValidationResponse{

@@ -38,11 +38,8 @@ func (h *Hub) SetOnRoomEmptyCallback(callback func(roomId string)) {
 }
 
 func (h *Hub) AddClient(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Client, error) {
-	log.Printf("acquiring lock")
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
-
-	log.Printf("lock acquired on AddClient")
 
 	if _, ok := h.roomClients[roomId]; !ok {
 		rc := wsTypes.NewRoomClient()
@@ -51,7 +48,6 @@ func (h *Hub) AddClient(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Cl
 	}
 
 	room := h.roomClients[roomId]
-	log.Printf("AddClient: room: %v", *room)
 
 	if room.PlayerOne != nil && room.PlayerOne.PlayerId == playerId {
 		select {
@@ -61,7 +57,7 @@ func (h *Hub) AddClient(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Cl
 		}
 		room.PlayerOne.Done = make(chan struct{})
 		room.PlayerOne.Conn = conn
-		log.Printf("client reconnected as %s", room.PlayerOne.Role)
+		log.Printf("player %s reconnected as %s", playerId, room.PlayerOne.Role)
 		return room.PlayerOne, nil
 	}
 
@@ -73,7 +69,7 @@ func (h *Hub) AddClient(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Cl
 		}
 		room.PlayerTwo.Done = make(chan struct{})
 		room.PlayerTwo.Conn = conn
-		log.Printf("client reconnected as %s", room.PlayerTwo.Role)
+		log.Printf("player %s reconnected as %s", playerId, room.PlayerTwo.Role)
 		return room.PlayerTwo, nil
 	}
 
@@ -122,7 +118,6 @@ func (h *Hub) AddClient(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Cl
 		room.Spectators[conn] = client
 	}
 
-	log.Printf("client connected as %s", client.Role)
 	return client, nil
 }
 
@@ -156,19 +151,18 @@ func (h *Hub) RemoveClient(roomId string, conn wsTypes.Conn) {
 
 	if room.PlayerOne != nil && room.PlayerOne.Conn == conn {
 		room.PlayerOne.Conn = nil
-		log.Printf("player one disconnected (slot kept for reconnection)")
+		log.Printf("player %s disconnected (slot kept for reconnection)", room.PlayerOne.PlayerId)
 	}
 
 	if room.PlayerTwo != nil && room.PlayerTwo.Conn == conn {
 		room.PlayerTwo.Conn = nil
-		log.Printf("player two disconnected (slot kept for reconnection)")
+		log.Printf("player %s disconnected (slot kept for reconnection)", room.PlayerTwo.PlayerId)
 	}
 
 	delete(room.Spectators, conn)
 
 	room.LastActive = time.Now()
 	h.mtx.Unlock()
-	log.Printf("client disconnected")
 }
 
 func (h *Hub) Broadcast(roomId string, message any, resetWarning bool) error {

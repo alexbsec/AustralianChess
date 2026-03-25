@@ -48,7 +48,7 @@ func extractToken(request *http.Request) (string, error) {
 	token := request.Header.Get("Authorization")
 	if token != "" {
 		if !isBearerToken(token) {
-			log.Printf("invalid token format: %s. Expected token Bearer", token)
+			log.Printf("invalid token format: expected Bearer scheme")
 			return "", ErrInvalidToken
 		}
 

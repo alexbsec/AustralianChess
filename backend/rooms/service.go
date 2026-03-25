@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -135,8 +134,6 @@ func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId strin
 		GameStarted: false,
 	}
 
-	log.Printf("updating playerId: %s", playerId)
-
 	room, err := s.FetchRoom(ctx, roomId)
 	if err != nil {
 		return joinResult, err
@@ -167,10 +164,8 @@ func (s *Service) handlePromoteCommand(ctx context.Context, room *Room, cmd cont
 	engineResult := s.chessEngine.PromotePawn(room.GameState, cmd.RequesteeColor, cmd.PromoteTo, cmd.PiecePosition, cmd.DestPosition)
 	switch engineResult.Type {
 	case engine.ErrorResponse:
-		log.Printf("error attempting to promote pawn: %v", engineResult.Message)
-		return nil, fmt.Errorf("error: %v", engineResult.Message)
+		return nil, fmt.Errorf("promote pawn: %v", engineResult.Message)
 	case engine.FailureResponse:
-		log.Printf("could not promote pawn due to validation: %v", engineResult.Message)
 		return result, nil
 	default:
 		break
@@ -191,10 +186,8 @@ func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd contrac
 	engineResult := s.chessEngine.ValidateAndMove(room.GameState, cmd.RequesteeColor, cmd.FromPos, cmd.ToPos)
 	switch engineResult.Type {
 	case engine.ErrorResponse:
-		log.Printf("error attempting to move piece: %v", engineResult.Message)
-		return nil, fmt.Errorf("error: %v", engineResult.Message)
+		return nil, fmt.Errorf("move piece: %v", engineResult.Message)
 	case engine.FailureResponse:
-		log.Printf("could not move piece due to validation: %v", engineResult.Message)
 		return result, nil
 	default:
 		break
@@ -215,6 +208,5 @@ func (s *Service) handleMoveCommand(ctx context.Context, room *Room, cmd contrac
 	}
 
 	result.GameState = *room.GameState
-	log.Printf("piece moved: %v", engineResult.Message)
 	return result, nil
 }

@@ -89,22 +89,20 @@ func (h *Handler) PlayBot(ctx *gin.Context, playBotDTO PlayBotDTO) {
 
 	conn, err := h.upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		log.Printf("ws upgrade failed: %v", err)
+		log.Printf("ws upgrade failed for room %s: %v", roomId, err)
 		ctx.JSON(http.StatusInternalServerError, ErrorMessage{
 			Type: "error",
 			Message: "failed to upgrade connection",
 		})
 		return
 	}
-	log.Printf("bot room connection upgraded")
 
 	client, err := h.hub.AddClient(roomId, user.PlayerId, conn)
 	if err != nil {
-		log.Printf("failed to add client to hub: %v", err)
+		log.Printf("failed to add client to hub for room %s: %v", roomId, err)
 		_ = conn.Close()
 		return
 	}
-	log.Printf("client added to hub")
 
 	defer func() {
 		h.gameOrchestrator.HandleDisconnect(roomId, client)
@@ -118,31 +116,28 @@ func (h *Handler) PlayBot(ctx *gin.Context, playBotDTO PlayBotDTO) {
         _ = client.WriteJSON(ErrorMessage{Type: "error", Message: "connection was not successful"})
         return
 	}
-	log.Printf("initialState: %v", initialState)
 
     if err := client.WriteJSON(GameStateMessage{
         Type:        "game_state",
         GameState:   initialState,
         PlayerColor: client.Color,
     }); err != nil {
-        log.Printf("failed to write initial game state: %v", err)
+        log.Printf("failed to send initial game state to player %s: %v", user.PlayerId, err)
         return
     }
-	log.Printf("message sent containing initialState")
 
     if result != nil {
         if err := h.hub.Broadcast(roomId, result, true); err != nil {
-            log.Printf("failed to broadcast player joining: %v", err)
+            log.Printf("failed to broadcast player joining for room %s: %v", roomId, err)
             return
         }
     }
 
-	log.Printf("client %v added to hub for room %s and playerId %s with role %s", client, roomId, user.PlayerId, client.Role)
+	log.Printf("player %s connected to room %s as %s", user.PlayerId, roomId, client.Role)
 	h.loop(reqCtx, roomId, client)
 }
 
 func (h *Handler) HandleRoom(ctx *gin.Context, roomId string) {
-	log.Printf("handling new websocket connection for room %s", ctx.Param("id"))
 	userId := h.authorize(ctx)
 
 	reqCtx := ctx.Request.Context()
@@ -157,22 +152,20 @@ func (h *Handler) HandleRoom(ctx *gin.Context, roomId string) {
 	}
 	playerId := user.PlayerId
 
-	log.Printf("upgrading connection to websocket for room %s and playerId %s", roomId, playerId)
 	conn, err := h.upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
-		log.Printf("ws upgrade failed: %v", err)
+		log.Printf("ws upgrade failed for room %s, player %s: %v", roomId, playerId, err)
 		return
 	}
 
-	log.Printf("adding client to hub for room %s and playerId %s", roomId, playerId)
 	client, err := h.hub.AddClient(roomId, playerId, conn)
 	if err != nil {
-		log.Printf("failed to add client to hub: %v", err)
+		log.Printf("failed to add client to hub for room %s, player %s: %v", roomId, playerId, err)
 		_ = conn.Close()
 		return
 	}
 
-	log.Printf("client %v added to hub for room %s and playerId %s with role %s", client, roomId, playerId, client.Role)
+	log.Printf("player %s connected to room %s as %s", playerId, roomId, client.Role)
 	defer func() {
 		h.gameOrchestrator.HandleDisconnect(roomId, client)
 		h.hub.RemoveClient(roomId, conn)
@@ -181,24 +174,23 @@ func (h *Handler) HandleRoom(ctx *gin.Context, roomId string) {
 
 	result, initialState, err := h.gameOrchestrator.HandleConnect(reqCtx, roomId, client)
 	if err != nil {
-		log.Printf("failed to handle connection for room %s: %v", roomId, err)
+		log.Printf("failed to handle connection for room %s, player %s: %v", roomId, playerId, err)
 		_ = client.WriteJSON(ErrorMessage{Type: "error", Message: "connection was not successful"})
 		return
 	}
 
-	// handle connect
     if err := client.WriteJSON(GameStateMessage{
         Type:        "game_state",
         GameState:   initialState,
         PlayerColor: client.Color,
     }); err != nil {
-        log.Printf("failed to write initial game state: %v", err)
+        log.Printf("failed to send initial game state to player %s: %v", playerId, err)
         return
     }
 
 	if result != nil {
 		if err := h.hub.Broadcast(roomId, result, true); err != nil {
-			log.Printf("failed to broadcast player joining: %v", err)
+			log.Printf("failed to broadcast player joining for room %s: %v", roomId, err)
 		}
 	}
 
@@ -224,7 +216,7 @@ func (h *Handler) loop(ctx context.Context, roomId string, client *wsTypes.Clien
 
 		cmd, err := h.wsParser.ParseMessage(roomId, data)
 		if err != nil {
-			log.Printf("parser failed to parse data: %v, err: %v", string(data), err)
+			log.Printf("failed to parse message from player %s: %v", client.PlayerId, err)
 			client.WriteJSON(ErrorMessage{Type: "error", Message: "could not parse message"})
 			continue
 		}
@@ -255,17 +247,13 @@ func keepAlivePing(ctx context.Context, client *wsTypes.Client) {
 	for {
 		select {
 		case <-ticker.C:
-			log.Printf("sending ping to client %s", client.PlayerId)
 			if err := client.WritePing(); err != nil {
 				log.Printf("ping failed for client %s: %v", client.PlayerId, err)
 				return
 			}
-			log.Printf("ping sent to client %s", client.PlayerId)
 		case <-client.Done:
-			log.Printf("keepalive stopped for client %s (done)", client.PlayerId)
 			return
 		case <-ctx.Done():
-			log.Printf("keepalive stopped for client %s (ctx)", client.PlayerId)
 			return
 		}
 	}

@@ -2,7 +2,6 @@ package gin
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -62,7 +61,6 @@ func Multiplayer(wsHandler ws.IHandler) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		roomId := ctx.Param("id")
 		if roomId == "" {
-			log.Printf("missing room id in request")
 			ctx.JSON(http.StatusBadRequest, ws.ErrorMessage{
 				Type:    "error",
 				Message: "missing room id",

@@ -29,7 +29,6 @@ func NewGameOrchestrator(roomService rooms.IService, botManager bot.Manager, cal
 func (g *GameOrchestrator) HandlePlayBotRoom(ctx context.Context, roomId string, playerColor chess.PieceColor, difficulty bot.Difficulty) error {
 	room, err := g.roomService.FetchRoom(ctx, roomId)
 	if err != nil {
-		log.Printf("could not fetch room: %v", err)
 		return err
 	}
 
@@ -53,7 +52,7 @@ func (g *GameOrchestrator) HandlePlayBotRoom(ctx context.Context, roomId string,
 func (g *GameOrchestrator) HandleConnect(ctx context.Context, roomId string, client *wsTypes.Client) (contracts.Result, chess.GameState, error) {
 	room, err := g.roomService.FetchRoom(ctx, roomId)
 	if err != nil {
-		log.Printf("REJECTED: Room %s not found in Service: %v", roomId, err) // CHECK THIS LOG
+		log.Printf("room %s not found: %v", roomId, err)
 		return nil, chess.GameState{}, err
 	}
 
@@ -71,6 +70,11 @@ func (g *GameOrchestrator) HandleConnect(ctx context.Context, roomId string, cli
 		)
 		if err != nil {
 			return nil, chess.GameState{}, err
+		}
+
+		// Notify bot of initial state so it can move first if it's white
+		if g.botManager.HasBot(roomId) {
+			g.notifyBotAfterJoin(ctx, roomId, result)
 		}
 
 		return result, *room.GameState, nil
@@ -116,6 +120,18 @@ func (g *GameOrchestrator) HandleDisconnect(roomId string, client *wsTypes.Clien
 
 func (g *GameOrchestrator) HandleDestroyRoom(ctx context.Context, roomId string) error {
 	return g.roomService.DeleteRoom(ctx, roomId)
+}
+
+func (g *GameOrchestrator) notifyBotAfterJoin(ctx context.Context, roomId string, result contracts.Result) {
+	joinResult, ok := result.(contracts.PlayerJoinedResult)
+	if !ok || !joinResult.GameStarted {
+		return
+	}
+	room, err := g.roomService.FetchRoom(ctx, roomId)
+	if err != nil || room.GameState == nil {
+		return
+	}
+	g.botManager.NotifyState(roomId, *room.GameState)
 }
 
 func gameStateFromResult(result contracts.Result) (chess.GameState, bool) {
