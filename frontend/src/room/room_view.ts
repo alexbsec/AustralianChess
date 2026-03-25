@@ -107,7 +107,7 @@ export class RoomView {
         document.getElementById("inactivity-warning")?.remove();
     }
 
-    public showGameOverModal(reason: string, onNewGame: () => void): void {
+    public showGameOverModal(reason: string, onNewGame: () => void, newGameLabel = "Create New Room"): void {
         if (document.getElementById("game-over-modal")) return;
 
         const modalOverlay = document.createElement("div");
@@ -123,7 +123,7 @@ export class RoomView {
                 <h2 style="margin-top: 0; color: var(--primary);">Game Over</h2>
                 <p style="margin-bottom: 24px; color: var(--text);">${reason}</p>
                 <div class="modal-actions">
-                    <button id="modal-new-room-btn" class="btn btn-primary">Create New Room</button>
+                    <button id="modal-new-room-btn" class="btn btn-primary">${newGameLabel}</button>
                     <button id="modal-close-btn" class="btn btn-secondary">Close</button>
                 </div>
             </div>

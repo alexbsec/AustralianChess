@@ -19,21 +19,20 @@ export type SocketHandlers = {
 };
 
 export class RoomSocket {
-    private roomId: string;
     private handlers: SocketHandlers;
     private socket: WebSocket | null = null;
+    private wsUrl: string;
 
-    constructor(roomId: string, handlers: SocketHandlers) {
-        this.roomId = roomId;
+    constructor(roomId: string, handlers: SocketHandlers, wsUrl?: string) {
         this.handlers = handlers;
+        this.wsUrl = wsUrl ?? buildRoomWsUrl(roomId);
     }
 
     /**
      * Initializes the connection and attaches event listeners.
      */
     public connect(): void {
-        const url = buildRoomWsUrl(this.roomId);
-        this.socket = new WebSocket(url);
+        this.socket = new WebSocket(this.wsUrl);
 
         this.socket.addEventListener("open", () => this.handlers.onOpen());
         this.socket.addEventListener("message", (event) => this.handleMessage(event));

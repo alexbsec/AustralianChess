@@ -12,9 +12,9 @@ import (
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 	"github.com/alexbsec/AustralianChess/backend/internal/contracts"
 	contractsMocks "github.com/alexbsec/AustralianChess/backend/internal/contracts/mocks"
+	gameMocks "github.com/alexbsec/AustralianChess/backend/internal/game/mocks"
 	parserMocks "github.com/alexbsec/AustralianChess/backend/internal/ws/parser/mocks"
-	"github.com/alexbsec/AustralianChess/backend/rooms"
-	roomsMocks "github.com/alexbsec/AustralianChess/backend/rooms/mocks"
+	wsTypes "github.com/alexbsec/AustralianChess/backend/internal/ws/ws_types"
 	"github.com/alexbsec/AustralianChess/backend/users"
 	usersMocks "github.com/alexbsec/AustralianChess/backend/users/mocks"
 	"github.com/gin-gonic/gin"
@@ -61,7 +61,7 @@ func (h *testHub) Broadcast(roomId string, msg any, resetWarning bool) error {
 
 // RemoveClient calls the real implementation then fires the optional hook so
 // tests can synchronise on handler-goroutine completion.
-func (h *testHub) RemoveClient(roomId string, conn Conn) {
+func (h *testHub) RemoveClient(roomId string, conn wsTypes.Conn) {
 	h.Hub.RemoveClient(roomId, conn)
 	if h.onRemoveClient != nil {
 		h.onRemoveClient()
@@ -79,7 +79,7 @@ func newPrivateRouter(t *testing.T, h *Handler) *httptest.Server {
 	r.GET("/ws/:id", func(c *gin.Context) {
 		c.Set("sessionId", int64(1))
 		c.Set("userId", int64(42))
-		h.HandleRoom(c)
+		h.HandleRoom(c, c.Param("id"))
 	})
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -123,7 +123,7 @@ func newPrivateGameState() chess.GameState {
 // loopTestDeps groups the objects needed by every player-loop test.
 type loopTestDeps struct {
 	hub        *testHub
-	roomSvc    *roomsMocks.MockIService
+	gameMock   *gameMocks.MockGame
 	mockParser *parserMocks.MockIParser
 	handler    *Handler
 }
@@ -142,7 +142,7 @@ func setupPlayerLoopTest(
 	wg.Add(1)
 
 	hub := newTestHub(failBroadcastAt, func() { wg.Done() })
-	roomSvc := roomsMocks.NewMockIService(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	mockParser := parserMocks.NewMockIParser(ctrl)
 
@@ -156,20 +156,18 @@ func setupPlayerLoopTest(
 	userSvc.EXPECT().
 		User(gomock.Any(), int64(42)).
 		Return(&users.User{PlayerId: "p1"}, nil)
-	roomSvc.EXPECT().
-		FetchRoom(gomock.Any(), "room-1").
-		Return(&rooms.Room{Id: "room-1", GameState: &gs}, nil)
-	// Real Hub randomises color, so match any value.
-	roomSvc.EXPECT().
-		UpdatePlayerJoined(gomock.Any(), "room-1", "p1", gomock.Any()).
-		Return(joinResult, nil)
+	gameMock.EXPECT().
+		HandleConnect(gomock.Any(), "room-1", gomock.Any()).
+		Return(joinResult, gs, nil)
+	gameMock.EXPECT().
+		HandleDisconnect("room-1", gomock.Any())
 
-	handler := NewHandler(roomSvc, userSvc, hub)
+	handler := NewHandler(userSvc, hub, gameMock)
 	handler.wsParser = mockParser // only possible from within package ws
 
 	return &loopTestDeps{
 		hub:        hub,
-		roomSvc:    roomSvc,
+		gameMock:   gameMock,
 		mockParser: mockParser,
 		handler:    handler,
 	}, &wg
@@ -191,19 +189,20 @@ func TestHandleRoom_Loop_SpectatorSendsMessage_GetsError(t *testing.T) {
 	hub := newTestHub(0, func() { wg.Done() })
 
 	// Pre-populate the room so that "p1" is assigned the Spectator role.
-	rc := NewRoomClient()
-	rc.PlayerOne = &Client{PlayerId: "p2", Role: PlayerOne, Done: make(chan struct{})}
-	rc.PlayerTwo = &Client{PlayerId: "p3", Role: PlayerTwo, Done: make(chan struct{})}
+	rc := wsTypes.NewRoomClient()
+	rc.PlayerOne = &wsTypes.Client{PlayerId: "p2", Role: wsTypes.PlayerOne, Done: make(chan struct{})}
+	rc.PlayerTwo = &wsTypes.Client{PlayerId: "p3", Role: wsTypes.PlayerTwo, Done: make(chan struct{})}
 	hub.SetRoomForTest("room-1", rc)
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 
 	gs := newPrivateGameState()
 	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
-	roomSvc.EXPECT().FetchRoom(gomock.Any(), "room-1").Return(&rooms.Room{Id: "room-1", GameState: &gs}, nil)
+	gameMock.EXPECT().HandleConnect(gomock.Any(), "room-1", gomock.Any()).Return(nil, gs, nil)
+	gameMock.EXPECT().HandleDisconnect("room-1", gomock.Any())
 
-	handler := NewHandler(roomSvc, userSvc, hub)
+	handler := NewHandler(userSvc, hub, gameMock)
 	srv := newPrivateRouter(t, handler)
 
 	// Spectator receives only the initial game_state (no join broadcast).
@@ -250,15 +249,15 @@ func TestHandleRoom_Loop_ParseFails_SendsError(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(msg, &payload))
 	assert.Equal(t, "error", payload["type"])
-	assert.Equal(t, "bad message", payload["message"])
+	assert.Equal(t, "could not parse message", payload["message"])
 
 	_ = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	conn.Close()
 	waitHandlerDone(t, wg)
 }
 
-// TestHandleRoom_Loop_ExecuteCommandFails_SendsError verifies that an
-// ExecuteCommand failure causes the handler to send an error to the client.
+// TestHandleRoom_Loop_ExecuteCommandFails_SendsError verifies that a
+// HandleCommand failure causes the handler to send an error to the client.
 func TestHandleRoom_Loop_ExecuteCommandFails_SendsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -269,10 +268,8 @@ func TestHandleRoom_Loop_ExecuteCommandFails_SendsError(t *testing.T) {
 	deps.mockParser.EXPECT().
 		ParseMessage("room-1", gomock.Any()).
 		Return(mockCmd, nil)
-	mockCmd.EXPECT().SetPlayerId("p1").Return(mockCmd)
-	mockCmd.EXPECT().SetColor(gomock.Any()).Return(mockCmd)
-	deps.roomSvc.EXPECT().
-		ExecuteCommand(gomock.Any(), mockCmd).
+	deps.gameMock.EXPECT().
+		HandleCommand(gomock.Any(), "room-1", gomock.Any(), mockCmd).
 		Return(nil, errors.New("illegal move"))
 
 	srv := newPrivateRouter(t, deps.handler)
@@ -287,20 +284,20 @@ func TestHandleRoom_Loop_ExecuteCommandFails_SendsError(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(msg, &payload))
 	assert.Equal(t, "error", payload["type"])
-	assert.Equal(t, "illegal move", payload["message"])
+	assert.Equal(t, "internal server error", payload["message"])
 
 	_ = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	conn.Close()
 	waitHandlerDone(t, wg)
 }
 
-// TestHandleRoom_Loop_BroadcastFails_ConnectionClosed verifies that a
-// Broadcast failure after a successful command causes the handler to close the
-// connection.
+// TestHandleRoom_Loop_BroadcastFails_SendsError verifies that a
+// Broadcast failure after a successful command causes the handler to send an
+// error message to the client (loop continues).
 //
 // failBroadcastAt=2: the join broadcast (call 1) succeeds, the command
-// broadcast (call 2) returns an error so the loop exits.
-func TestHandleRoom_Loop_BroadcastFails_ConnectionClosed(t *testing.T) {
+// broadcast (call 2) returns an error.
+func TestHandleRoom_Loop_BroadcastFails_SendsError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -312,10 +309,8 @@ func TestHandleRoom_Loop_BroadcastFails_ConnectionClosed(t *testing.T) {
 	deps.mockParser.EXPECT().
 		ParseMessage("room-1", gomock.Any()).
 		Return(mockCmd, nil)
-	mockCmd.EXPECT().SetPlayerId("p1").Return(mockCmd)
-	mockCmd.EXPECT().SetColor(gomock.Any()).Return(mockCmd)
-	deps.roomSvc.EXPECT().
-		ExecuteCommand(gomock.Any(), mockCmd).
+	deps.gameMock.EXPECT().
+		HandleCommand(gomock.Any(), "room-1", gomock.Any(), mockCmd).
 		Return(mockResult, nil)
 
 	srv := newPrivateRouter(t, deps.handler)
@@ -323,11 +318,17 @@ func TestHandleRoom_Loop_BroadcastFails_ConnectionClosed(t *testing.T) {
 
 	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"move"}`)))
 
-	// The server closes the connection after the failed broadcast.
+	// The server sends an error message after the failed broadcast.
 	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	_, _, readErr := conn.ReadMessage()
-	assert.Error(t, readErr)
+	_, msg, readErr := conn.ReadMessage()
+	require.NoError(t, readErr)
 
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(msg, &payload))
+	assert.Equal(t, "error", payload["type"])
+	assert.Equal(t, "failed to broadcast result", payload["message"])
+
+	_ = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	conn.Close()
 	waitHandlerDone(t, wg)
 }
@@ -346,10 +347,8 @@ func TestHandleRoom_Loop_SuccessfulCommand_Broadcasts(t *testing.T) {
 	deps.mockParser.EXPECT().
 		ParseMessage("room-1", gomock.Any()).
 		Return(mockCmd, nil)
-	mockCmd.EXPECT().SetPlayerId("p1").Return(mockCmd)
-	mockCmd.EXPECT().SetColor(gomock.Any()).Return(mockCmd)
-	deps.roomSvc.EXPECT().
-		ExecuteCommand(gomock.Any(), mockCmd).
+	deps.gameMock.EXPECT().
+		HandleCommand(gomock.Any(), "room-1", gomock.Any(), mockCmd).
 		Return(moveResult, nil)
 
 	srv := newPrivateRouter(t, deps.handler)

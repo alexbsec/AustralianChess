@@ -12,10 +12,10 @@ import (
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 	"github.com/alexbsec/AustralianChess/backend/internal/contracts"
+	gameMocks "github.com/alexbsec/AustralianChess/backend/internal/game/mocks"
 	ws "github.com/alexbsec/AustralianChess/backend/internal/ws"
 	wsMocks "github.com/alexbsec/AustralianChess/backend/internal/ws/mocks"
-	"github.com/alexbsec/AustralianChess/backend/rooms"
-	roomsMocks "github.com/alexbsec/AustralianChess/backend/rooms/mocks"
+	wsTypes "github.com/alexbsec/AustralianChess/backend/internal/ws/ws_types"
 	"github.com/alexbsec/AustralianChess/backend/users"
 	usersMocks "github.com/alexbsec/AustralianChess/backend/users/mocks"
 	"github.com/gin-gonic/gin"
@@ -39,8 +39,30 @@ func newRouter(t *testing.T, handler *ws.Handler) *httptest.Server {
 	r.GET("/ws/:id", func(c *gin.Context) {
 		c.Set("sessionId", int64(1))
 		c.Set("userId", int64(42))
-		handler.HandleRoom(c)
+		handler.HandleRoom(c, c.Param("id"))
 	})
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func newPlayBotRouter(t *testing.T, handler *ws.Handler) *httptest.Server {
+	t.Helper()
+	r := gin.New()
+
+	r.GET("/playbot", func(c *gin.Context) {
+		c.Set("sessionId", int64(1))
+		c.Set("userId", int64(42))
+
+		dto := ws.PlayBotDTO{
+			RoomId:          "room-1",
+			PlayerPlayingAs: chess.PieceWhite,
+			Difficulty:      2,
+		}
+
+		handler.PlayBot(c, dto)
+	})
+
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 	return srv
@@ -83,12 +105,12 @@ func closeAndWait(t *testing.T, conn *websocket.Conn, wg *sync.WaitGroup) {
 	}
 }
 
-// makeClient returns a DoAndReturn func that builds a Client from the ws.Conn
+// makeClient returns a DoAndReturn func that builds a Client from the wsTypes.Conn
 // the handler passes in, avoiding nil-Conn panics in WriteJSON.
-func makeClient(role ws.Role, color chess.PieceColor) func(string, string, ws.Conn) (*ws.Client, error) {
-	return func(roomId, playerId string, conn ws.Conn) (*ws.Client, error) {
+func makeClient(role wsTypes.Role, color chess.PieceColor) func(string, string, wsTypes.Conn) (*wsTypes.Client, error) {
+	return func(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Client, error) {
 		c := color
-		return &ws.Client{
+		return &wsTypes.Client{
 			Conn:     conn,
 			PlayerId: playerId,
 			Role:     role,
@@ -106,18 +128,18 @@ func TestNewHandler_DeletesRoomWhenEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 
 	var capturedCb func(string)
 	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any()).DoAndReturn(func(cb func(string)) {
 		capturedCb = cb
 	})
 	hub.EXPECT().StartJanitor()
-	roomSvc.EXPECT().DeleteRoom(gomock.Any(), "room-1").Return(nil)
+	gameMock.EXPECT().HandleDestroyRoom(gomock.Any(), "room-1").Return(nil)
 
-	ws.NewHandler(roomSvc, userSvc, hub)
+	ws.NewHandler(userSvc, hub, gameMock)
 
 	require.NotNil(t, capturedCb)
 	capturedCb("room-1")
@@ -127,18 +149,18 @@ func TestNewHandler_DeleteRoomError_NoPanic(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 
 	var capturedCb func(string)
 	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any()).DoAndReturn(func(cb func(string)) {
 		capturedCb = cb
 	})
 	hub.EXPECT().StartJanitor()
-	roomSvc.EXPECT().DeleteRoom(gomock.Any(), "room-1").Return(errors.New("not found"))
+	gameMock.EXPECT().HandleDestroyRoom(gomock.Any(), "room-1").Return(errors.New("not found"))
 
-	ws.NewHandler(roomSvc, userSvc, hub)
+	ws.NewHandler(userSvc, hub, gameMock)
 
 	assert.NotPanics(t, func() { capturedCb("room-1") })
 }
@@ -151,53 +173,26 @@ func TestHandleRoom_UserFetchFails_Returns500(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 
 	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
 	hub.EXPECT().StartJanitor()
 	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(nil, errors.New("db error"))
 
-	handler := ws.NewHandler(roomSvc, userSvc, hub)
+	handler := ws.NewHandler(userSvc, hub, gameMock)
 
 	r := gin.New()
 	r.GET("/ws/:id", func(c *gin.Context) {
 		c.Set("sessionId", int64(1))
 		c.Set("userId", int64(42))
-		handler.HandleRoom(c)
+		handler.HandleRoom(c, c.Param("id"))
 	})
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ws/room-1", nil))
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestHandleRoom_RoomNotFound_Returns400(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	roomSvc := roomsMocks.NewMockIService(ctrl)
-	userSvc := usersMocks.NewMockIService(ctrl)
-	hub := wsMocks.NewMockIHub(ctrl)
-
-	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
-	hub.EXPECT().StartJanitor()
-	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
-	roomSvc.EXPECT().FetchRoom(gomock.Any(), "room-1").Return(nil, errors.New("invalid room id"))
-
-	handler := ws.NewHandler(roomSvc, userSvc, hub)
-
-	r := gin.New()
-	r.GET("/ws/:id", func(c *gin.Context) {
-		c.Set("sessionId", int64(1))
-		c.Set("userId", int64(42))
-		handler.HandleRoom(c)
-	})
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ws/room-1", nil))
-	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // ---------------------------------------------------------------------------
@@ -208,9 +203,9 @@ func TestHandleRoom_SpectatorConnects_ReceivesGameState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 
 	gs := newGameState()
 	var wg sync.WaitGroup
@@ -219,12 +214,14 @@ func TestHandleRoom_SpectatorConnects_ReceivesGameState(t *testing.T) {
 	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
 	hub.EXPECT().StartJanitor()
 	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
-	roomSvc.EXPECT().FetchRoom(gomock.Any(), "room-1").Return(&rooms.Room{Id: "room-1", GameState: &gs}, nil)
 	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).
-		DoAndReturn(makeClient(ws.Spectator, chess.PieceWhite))
-	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, ws.Conn) { wg.Done() })
+		DoAndReturn(makeClient(wsTypes.Spectator, chess.PieceWhite))
+	gameMock.EXPECT().HandleConnect(gomock.Any(), "room-1", gomock.Any()).
+		Return(nil, gs, nil)
+	gameMock.EXPECT().HandleDisconnect("room-1", gomock.Any())
+	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, wsTypes.Conn) { wg.Done() })
 
-	handler := ws.NewHandler(roomSvc, userSvc, hub)
+	handler := ws.NewHandler(userSvc, hub, gameMock)
 	srv := newRouter(t, handler)
 
 	conn, msg := dialAndReadFirst(t, wsURL(srv, "room-1"))
@@ -240,9 +237,9 @@ func TestHandleRoom_PlayerOneConnects_BroadcastsJoin(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
 
 	gs := newGameState()
 	var wg sync.WaitGroup
@@ -257,14 +254,15 @@ func TestHandleRoom_PlayerOneConnects_BroadcastsJoin(t *testing.T) {
 	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
 	hub.EXPECT().StartJanitor()
 	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
-	roomSvc.EXPECT().FetchRoom(gomock.Any(), "room-1").Return(&rooms.Room{Id: "room-1", GameState: &gs}, nil)
 	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).
-		DoAndReturn(makeClient(ws.PlayerOne, chess.PieceWhite))
-	roomSvc.EXPECT().UpdatePlayerJoined(gomock.Any(), "room-1", "p1", chess.PieceWhite).Return(joinResult, nil)
+		DoAndReturn(makeClient(wsTypes.PlayerOne, chess.PieceWhite))
+	gameMock.EXPECT().HandleConnect(gomock.Any(), "room-1", gomock.Any()).
+		Return(joinResult, gs, nil)
 	hub.EXPECT().Broadcast("room-1", joinResult, true).Return(nil)
-	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, ws.Conn) { wg.Done() })
+	gameMock.EXPECT().HandleDisconnect("room-1", gomock.Any())
+	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, wsTypes.Conn) { wg.Done() })
 
-	handler := ws.NewHandler(roomSvc, userSvc, hub)
+	handler := ws.NewHandler(userSvc, hub, gameMock)
 	srv := newRouter(t, handler)
 
 	conn, msg := dialAndReadFirst(t, wsURL(srv, "room-1"))
@@ -280,19 +278,16 @@ func TestHandleRoom_AddClientFails_ServerClosesConnection(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	roomSvc := roomsMocks.NewMockIService(ctrl)
 	userSvc := usersMocks.NewMockIService(ctrl)
 	hub := wsMocks.NewMockIHub(ctrl)
-
-	gs := newGameState()
+	gameMock := gameMocks.NewMockGame(ctrl)
 
 	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
 	hub.EXPECT().StartJanitor()
 	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
-	roomSvc.EXPECT().FetchRoom(gomock.Any(), "room-1").Return(&rooms.Room{Id: "room-1", GameState: &gs}, nil)
 	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).Return(nil, errors.New("room full"))
 
-	handler := ws.NewHandler(roomSvc, userSvc, hub)
+	handler := ws.NewHandler(userSvc, hub, gameMock)
 	srv := newRouter(t, handler)
 
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL(srv, "room-1"), nil)
@@ -302,4 +297,204 @@ func TestHandleRoom_AddClientFails_ServerClosesConnection(t *testing.T) {
 		assert.Error(t, readErr)
 		conn.Close()
 	}
+}
+
+func TestPlayBot_UserFetchFails_Returns500(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	userSvc := usersMocks.NewMockIService(ctrl)
+	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
+
+	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
+	hub.EXPECT().StartJanitor()
+	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(nil, errors.New("db error"))
+
+	handler := ws.NewHandler(userSvc, hub, gameMock)
+
+	r := gin.New()
+	r.GET("/playbot", func(c *gin.Context) {
+		c.Set("sessionId", int64(1))
+		c.Set("userId", int64(42))
+		handler.PlayBot(c, ws.PlayBotDTO{
+			RoomId:          "room-1",
+			PlayerPlayingAs: chess.PieceWhite,
+			Difficulty:      2,
+		})
+	})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/playbot", nil))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestPlayBot_HandlePlayBotRoomFails_Returns500(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	userSvc := usersMocks.NewMockIService(ctrl)
+	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
+
+	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
+	hub.EXPECT().StartJanitor()
+	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
+	gameMock.EXPECT().HandlePlayBotRoom(gomock.Any(), "room-1", chess.PieceWhite, gomock.Any()).Return(errors.New("db error"))
+
+	handler := ws.NewHandler(userSvc, hub, gameMock)
+
+	r := gin.New()
+	r.GET("/playbot", func(c *gin.Context) {
+		c.Set("sessionId", int64(1))
+		c.Set("userId", int64(42))
+		handler.PlayBot(c, ws.PlayBotDTO{
+			RoomId:          "room-1",
+			PlayerPlayingAs: chess.PieceWhite,
+			Difficulty:      2,
+		})
+	})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/playbot", nil))
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestPlayBot_PlayerConnects_ReceivesGameState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	userSvc := usersMocks.NewMockIService(ctrl)
+	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
+
+	gs := newGameState()
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
+	hub.EXPECT().StartJanitor()
+	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
+	gameMock.EXPECT().HandlePlayBotRoom(gomock.Any(), "room-1", chess.PieceWhite, gomock.Any()).Return(nil)
+	hub.EXPECT().AddBot("room-1", gomock.Any(), chess.PieceBlack)
+	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).
+		DoAndReturn(makeClient(wsTypes.PlayerOne, chess.PieceWhite))
+	gameMock.EXPECT().HandleConnect(gomock.Any(), "room-1", gomock.Any()).
+		Return(nil, gs, nil)
+	gameMock.EXPECT().HandleDisconnect("room-1", gomock.Any())
+	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, wsTypes.Conn) { wg.Done() })
+
+	handler := ws.NewHandler(userSvc, hub, gameMock)
+	srv := newPlayBotRouter(t, handler)
+
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/playbot"
+	conn, msg := dialAndReadFirst(t, url)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(msg, &payload))
+	assert.Equal(t, "game_state", payload["type"])
+
+	closeAndWait(t, conn, &wg)
+}
+
+func TestPlayBot_AddClientFails_ServerClosesConnection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	userSvc := usersMocks.NewMockIService(ctrl)
+	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
+
+	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
+	hub.EXPECT().StartJanitor()
+	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
+	gameMock.EXPECT().HandlePlayBotRoom(gomock.Any(), "room-1", chess.PieceWhite, gomock.Any()).Return(nil)
+	hub.EXPECT().AddBot("room-1", gomock.Any(), chess.PieceBlack)
+	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).Return(nil, errors.New("room full"))
+
+	handler := ws.NewHandler(userSvc, hub, gameMock)
+	srv := newPlayBotRouter(t, handler)
+
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/playbot"
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err == nil {
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, _, readErr := conn.ReadMessage()
+		assert.Error(t, readErr)
+		conn.Close()
+	}
+}
+
+func TestHandleRoom_HandleConnectFails_SendsErrorAndCloses(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	userSvc := usersMocks.NewMockIService(ctrl)
+	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
+	hub.EXPECT().StartJanitor()
+	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
+	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).
+		DoAndReturn(makeClient(wsTypes.PlayerOne, chess.PieceWhite))
+	gameMock.EXPECT().HandleConnect(gomock.Any(), "room-1", gomock.Any()).
+		Return(nil, chess.GameState{}, errors.New("connect error"))
+	gameMock.EXPECT().HandleDisconnect("room-1", gomock.Any())
+	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, wsTypes.Conn) { wg.Done() })
+
+	handler := ws.NewHandler(userSvc, hub, gameMock)
+	srv := newRouter(t, handler)
+
+	conn, msg := dialAndReadFirst(t, wsURL(srv, "room-1"))
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(msg, &payload))
+	assert.Equal(t, "error", payload["type"])
+
+	closeAndWait(t, conn, &wg)
+}
+
+func TestHandleRoom_SpectatorSendsCommand_ReceivesError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	userSvc := usersMocks.NewMockIService(ctrl)
+	hub := wsMocks.NewMockIHub(ctrl)
+	gameMock := gameMocks.NewMockGame(ctrl)
+
+	gs := newGameState()
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	hub.EXPECT().SetOnRoomEmptyCallback(gomock.Any())
+	hub.EXPECT().StartJanitor()
+	userSvc.EXPECT().User(gomock.Any(), int64(42)).Return(&users.User{PlayerId: "p1"}, nil)
+	hub.EXPECT().AddClient("room-1", "p1", gomock.Any()).
+		DoAndReturn(makeClient(wsTypes.Spectator, chess.PieceWhite))
+	gameMock.EXPECT().HandleConnect(gomock.Any(), "room-1", gomock.Any()).
+		Return(nil, gs, nil)
+	gameMock.EXPECT().HandleDisconnect("room-1", gomock.Any())
+	hub.EXPECT().RemoveClient("room-1", gomock.Any()).Do(func(string, wsTypes.Conn) { wg.Done() })
+
+	handler := ws.NewHandler(userSvc, hub, gameMock)
+	srv := newRouter(t, handler)
+
+	conn, _ := dialAndReadFirst(t, wsURL(srv, "room-1"))
+
+	// spectator sends a command — should receive an error back
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	require.NoError(t, conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"move"}`)))
+	_, errMsg, err := conn.ReadMessage()
+	require.NoError(t, err)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(errMsg, &payload))
+	assert.Equal(t, "error", payload["type"])
+
+	closeAndWait(t, conn, &wg)
 }

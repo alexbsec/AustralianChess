@@ -14,7 +14,7 @@ func MakeHandlers(
 	ctx context.Context,
 	roomService rooms.IService,
 	userService users.IService,
-	wsHandler *ws.Handler,
+	wsHandler ws.IHandler,
 	authorizer auth.IAuthorizer,
 ) *gin.Engine {
 	router := gin.New()

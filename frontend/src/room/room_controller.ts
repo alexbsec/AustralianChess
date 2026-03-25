@@ -12,6 +12,12 @@ import { navigateTo } from "../router";
 import { createRoom } from "../pages/landing";
 import { getPlayerId } from "../auth";
 
+export type RoomControllerOptions = {
+    wsUrl?: string;
+    onNewGame?: () => void | Promise<void>;
+    newGameLabel?: string;
+};
+
 export class RoomController {
     private view: RoomView;
     private socket: RoomSocket;
@@ -27,8 +33,12 @@ export class RoomController {
     private warningInterval: ReturnType<typeof setInterval> | null = null;
     private dragWidth: number = 0;
     private dragHeight: number = 0;
+    private onNewGame: (() => void | Promise<void>) | undefined;
+    private newGameLabel: string;
 
-    constructor(container: HTMLDivElement, roomId: string) {
+    constructor(container: HTMLDivElement, roomId: string, options?: RoomControllerOptions) {
+        this.onNewGame = options?.onNewGame;
+        this.newGameLabel = options?.newGameLabel ?? "Create New Room";
         this.state = new RoomState();
         this.view = new RoomView(container);
         this.view.updateRoomId(roomId);
@@ -62,7 +72,7 @@ export class RoomController {
             },
             onError: () => this.handleError(),
             onClose: () => this.handleClose(),
-        });
+        }, options?.wsUrl);
 
         this.moveSound = new Audio();
         this.moveSound.src = "/sfx/piece_move.mp3";
@@ -456,17 +466,21 @@ export class RoomController {
 
             this.view.showGameOverModal(reason, async () => {
                 this.socket.disconnect();
-                try {
-                    const playerId = getPlayerId();
-                    if (playerId !== null) {
-                        await createRoom(playerId);
-                    } else {
+                if (this.onNewGame) {
+                    await this.onNewGame();
+                } else {
+                    try {
+                        const playerId = getPlayerId();
+                        if (playerId !== null) {
+                            await createRoom(playerId);
+                        } else {
+                            navigateTo("/");
+                        }
+                    } catch (error) {
                         navigateTo("/");
                     }
-                } catch (error) {
-                    navigateTo("/");
                 }
-            });
+            }, this.newGameLabel);
 
             this.modalShown = true;
             return;

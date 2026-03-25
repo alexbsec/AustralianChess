@@ -1,4 +1,4 @@
-package ws
+package ws_types
 
 import (
 	"net/http"
@@ -11,8 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
-
-
 
 func newTestWebSocket(t *testing.T) (*websocket.Conn, func()) {
 	upgrader := websocket.Upgrader{
