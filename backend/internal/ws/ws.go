@@ -3,6 +3,7 @@ package ws
 import (
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 	wsTypes "github.com/alexbsec/AustralianChess/backend/internal/ws/ws_types"
+	"github.com/gin-gonic/gin"
 )
 
 // Re-export ws_types so callers don't need to import the sub-package.
@@ -33,4 +34,9 @@ type IHub interface {
 	Broadcast(roomId string, msg any, resetWarning bool) error
 	SetRoomForTest(roomId string, roomClient *wsTypes.RoomClient)
 	GetRoomForTest(roomId string) *wsTypes.RoomClient
+}
+
+type IHandler interface {
+	PlayBot(ctx *gin.Context, playBotDTO PlayBotDTO)
+	HandleRoom(ctx *gin.Context, roomId string)
 }

@@ -17,7 +17,7 @@ func RoomHandler(
 	ctx context.Context,
 	routerGroup *gin.RouterGroup,
 	roomService rooms.IService,
-	wsHandler *ws.Handler,
+	wsHandler ws.IHandler,
 ) {
 	routerGroup.Handle("GET", "/create", MakeNewRoom(roomService))
 	routerGroup.Handle("GET", "/:id", ServeRoom(roomService))
@@ -58,7 +58,7 @@ func ServeRoom(roomService rooms.IService) gin.HandlerFunc {
 	}
 }
 
-func Multiplayer(wsHandler *ws.Handler) gin.HandlerFunc {
+func Multiplayer(wsHandler ws.IHandler) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		roomId := ctx.Param("id")
 		if roomId == "" {
@@ -74,7 +74,7 @@ func Multiplayer(wsHandler *ws.Handler) gin.HandlerFunc {
 	}
 }
 
-func Singleplayer(wsHandler *ws.Handler) gin.HandlerFunc {
+func Singleplayer(wsHandler ws.IHandler) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		roomId := ctx.Query("roomId")
 		if roomId == "" {
