@@ -11,7 +11,7 @@ import (
 	"github.com/alexbsec/AustralianChess/backend/rooms"
 )
 
-const thinkDelay = 2
+const thinkDelay = 200
 
 type TaipanBot struct {
 	roomId      string
@@ -71,7 +71,7 @@ func (b *TaipanBot) loop() {
 
 			// Small delay so it doesn't feel robotic
 			select {
-			case <-time.After(thinkDelay * time.Second):
+			case <-time.After(thinkDelay * time.Microsecond):
 			case <-b.ctx.Done():
 				return
 			}
