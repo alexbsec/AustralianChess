@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"sync/atomic"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 )
+
 
 var successMoveResFmt string = "piece %d movement accepted from %v to %v"
 var failureMoveResFmt string = "piece %d cannot move from %v to %v"
@@ -15,14 +17,28 @@ var captureMoveResFmt string = "piece %d capture piece %d on movement from %v to
 type ChessArbitrator struct {
 	blackPiecesPositions []chess.PiecePosition
 	whitePiecesPositions []chess.PiecePosition
+	tt                   map[uint64]ttEntry
+	stop                 atomic.Bool
 }
 
 func NewChessArbitrator() *ChessArbitrator {
-	return &ChessArbitrator{}
+	return &ChessArbitrator{
+		tt: make(map[uint64]ttEntry, 1<<16),
+	}
+}
+
+// SetStop allows external callers to signal the search to stop early.
+func (ca *ChessArbitrator) SetStop(v bool) {
+	ca.stop.Store(v)
+}
+
+// IsStopped reports whether a stop was requested.
+func (ca *ChessArbitrator) IsStopped() bool {
+	return ca.stop.Load()
 }
 
 func (ca *ChessArbitrator) CanMovePiece(board chess.Board, piece chess.Piece, fromPos, toPos chess.Position) (bool, string) {
-	if !isInsideBoard(board, fromPos, toPos) {
+	if !chess.IsInsideBoard(board, fromPos, toPos) {
 		return false, "movement not within board limits"
 	}
 
@@ -70,7 +86,7 @@ func (ca *ChessArbitrator) CanMovePiece(board chess.Board, piece chess.Piece, fr
 	return true, feedback
 }
 
-func (ca ChessArbitrator) IsInCheck(board chess.Board, turnColor chess.PieceColor) bool {
+func (ca *ChessArbitrator) IsInCheck(board chess.Board, turnColor chess.PieceColor) bool {
 	isCheck, _ := isKingInCheck(board, turnColor)
 	return isCheck
 }
@@ -95,6 +111,147 @@ func (ca *ChessArbitrator) IsStalemate(board chess.Board, turnColor chess.PieceC
 	}
 
 	return false
+}
+
+func (ca *ChessArbitrator) BestMove(board chess.Board, color chess.PieceColor, depth int) (chess.Move, bool) {
+    legalMoves := ca.getLegalMovesForColor(board, color)
+    if len(legalMoves) == 0 {
+        return chess.Move{}, false
+    }
+    legalMoves = ca.orderMoves(board, legalMoves)
+
+    hash := ZobristHash(board, color)
+
+    bestMove := legalMoves[0]
+    alpha, beta := minScore, maxScore
+    bestScore := minScore
+
+    for _, move := range legalMoves {
+        if ca.stop.Load() {
+            return chess.Move{}, false
+        }
+
+        next, err := applyMoveToBoard(board, move.FromPos, move.ToPos)
+        if err != nil {
+            continue
+        }
+
+        nextHash := ZobristUpdate(hash, board, move.FromPos, move.ToPos)
+        score := -ca.alphaBeta(next, depth-1, -beta, -alpha, chess.OponentColor(color), nextHash)
+
+        if score > bestScore {
+            bestScore = score
+            bestMove = move
+        }
+        if score > alpha {
+            alpha = score
+        }
+    }
+
+    if ca.stop.Load() {
+        return chess.Move{}, false
+    }
+    return bestMove, true
+}
+
+func (ca *ChessArbitrator) alphaBeta(board chess.Board, depth int, alpha, beta int, color chess.PieceColor, hash uint64) int {
+    if ca.stop.Load() {
+        return alpha
+    }
+
+    originalAlpha := alpha
+
+    // TT lookup now using precomputed hash
+    if entry, ok := ca.tt[hash]; ok && entry.depth >= depth {
+        switch entry.flag {
+        case ttExact:
+            return entry.score
+        case ttLowerBound:
+            if entry.score > alpha {
+                alpha = entry.score
+            }
+        case ttUpperBound:
+            if entry.score < beta {
+                beta = entry.score
+            }
+        }
+        if alpha >= beta {
+            return entry.score
+        }
+    }
+
+    if depth == 0 {
+        return chess.StaticEval(board, color)
+    }
+
+    legalMoves := ca.getLegalMovesForColor(board, color)
+    if len(legalMoves) == 0 {
+        inCheck, _ := isKingInCheck(board, color)
+        if inCheck {
+            return minScore + 1
+        }
+        return 0
+    }
+    legalMoves = ca.orderMoves(board, legalMoves)
+
+    bestMove := legalMoves[0]
+    for _, move := range legalMoves {
+        next, err := applyMoveToBoard(board, move.FromPos, move.ToPos)
+        if err != nil {
+            continue
+        }
+
+        nextHash := ZobristUpdate(hash, board, move.FromPos, move.ToPos)
+        score := -ca.alphaBeta(next, depth-1, -beta, -alpha, chess.OponentColor(color), nextHash)
+
+        if score >= beta {
+            ca.tt[hash] = ttEntry{hash: hash, depth: depth, score: beta, flag: ttLowerBound, bestMove: move}
+            return beta
+        }
+        if score > alpha {
+            alpha = score
+            bestMove = move
+        }
+    }
+
+    flag := ttExact
+    if alpha <= originalAlpha {
+        flag = ttUpperBound
+    }
+    ca.tt[hash] = ttEntry{hash: hash, depth: depth, score: alpha, flag: flag, bestMove: bestMove}
+
+    return alpha
+}
+
+func (ca *ChessArbitrator) orderMoves(board chess.Board, moves []chess.Move) []chess.Move {
+	type scored struct {
+		move  chess.Move
+		score int
+	}
+
+	sm := make([]scored, 0, len(moves))
+	for _, move := range moves {
+		score := 0
+		target := board.GetPiece(move.ToPos)
+		if target != nil {
+			attacker := board.GetPiece(move.FromPos)
+			score = chess.PieceBaseValue(target.Kind)*10 - chess.PieceBaseValue(attacker.Kind)
+		}
+		sm = append(sm, scored{move: move, score: score})
+	}
+
+	for i := 1; i < len(sm); i++ {
+		for j := i; j > 0 && sm[j].score > sm[j-1].score; j-- {
+			sm[j], sm[j-1] = sm[j-1], sm[j]
+		}
+	}
+
+	result := make([]chess.Move, len(sm))
+	for i, s := range sm {
+		result[i] = s.move
+	}
+
+	return result
 }
 
 func (ca *ChessArbitrator) getLegalMovesForColor(board chess.Board, color chess.PieceColor) []chess.Move {
@@ -157,7 +314,7 @@ func (ca *ChessArbitrator) useBoard(board chess.Board) {
 }
 
 func canMoveOligarch(board chess.Board, piece chess.Piece, fromPos, toPos chess.Position) (bool, string) {
-	hasFriendlyNeighbor := hasAdjacentFriendlyPiece(board, piece.Color, fromPos)
+	hasFriendlyNeighbor := chess.HasAdjacentFriendlyPiece(board, piece.Color, fromPos)
 	if hasFriendlyNeighbor {
 		return canMoveQueen(board, piece, fromPos, toPos)
 	}
@@ -369,16 +526,6 @@ func canMovePawn(board chess.Board, piece chess.Piece, fromPos, toPos chess.Posi
 	return false, failureMovementMessage(piece.Kind, fromPos, toPos)
 }
 
-func isInsideBoard(board chess.Board, fromPos, toPos chess.Position) bool {
-	rows, cols := board.Dimensions()
-	if fromPos.Row < 0 || fromPos.Row >= rows || fromPos.Col < 0 || fromPos.Col >= cols ||
-		toPos.Row < 0 || toPos.Row >= rows || toPos.Col < 0 || toPos.Col >= cols {
-		return false
-	}
-
-	return true
-}
-
 func isSameSquare(fromPos, toPos chess.Position) bool {
 	if fromPos.Col == toPos.Col && fromPos.Row == toPos.Row {
 		return true
@@ -497,36 +644,11 @@ func findKingPosition(board chess.Board, pieceColor chess.PieceColor) *chess.Pos
 	return nil
 }
 
-func hasAdjacentFriendlyPiece(board chess.Board, color chess.PieceColor, position chess.Position) bool {
-	for rowOffset := -1; rowOffset <= 1; rowOffset++ {
-		for colOffset := -1; colOffset <= 1; colOffset++ {
-			if rowOffset == 0 && colOffset == 0 {
-				continue
-			}
-
-			nextRow := position.Row + rowOffset
-			nextCol := position.Col + colOffset
-			nextPos := chess.Position{Row: nextRow, Col: nextCol}
-
-			if !isInsideBoard(board, position, nextPos) {
-				continue
-			}
-
-			neighbor := board.GetPiece(nextPos)
-			if neighbor != nil && neighbor.Color == color {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 func attackedByStepper(board chess.Board, piecePos chess.Position, attackerColor chess.PieceColor, offsets []chess.Position, kind chess.PieceKind) bool {
 	for _, offset := range offsets {
 		checkPos := chess.Position{Row: piecePos.Row + offset.Row, Col: piecePos.Col + offset.Col}
 
-		if !isInsideBoard(board, piecePos, checkPos) {
+		if !chess.IsInsideBoard(board, piecePos, checkPos) {
 			continue
 		}
 
@@ -558,7 +680,7 @@ func attackedBySlider(board chess.Board, piecePos chess.Position, attackerColor 
 				Col: piecePos.Col + dir.dc*i,
 			}
 
-			if !isInsideBoard(board, piecePos, currPos) {
+			if !chess.IsInsideBoard(board, piecePos, currPos) {
 				break
 			}
 
@@ -605,7 +727,7 @@ func isPieceASlider(
 			return true
 		}
 		// otherwise it becomes a slider only if activated
-		return hasAdjacentFriendlyPiece(board, piece.Color, position)
+		return chess.HasAdjacentFriendlyPiece(board, piece.Color, position)
 	default:
 		return false
 	}
@@ -615,6 +737,35 @@ func distance(pos1, pos2 chess.Position) (int, int) {
 	rowDiff := intAbs(pos1.Row - pos2.Row)
 	colDiff := intAbs(pos1.Col - pos2.Col)
 	return rowDiff, colDiff
+}
+
+func boardHash(board chess.Board, color chess.PieceColor) uint64 {
+	const (
+		offset uint64 = 14695981039346656037
+		prime  uint64 = 1099511628211
+	)
+
+	h := offset
+	rows, cols := board.Dimensions()
+
+	for row := range rows {
+		for col := range cols {
+			h ^= uint64(row*100 + col)
+			h *= prime
+
+			piece := board.GetPiece(chess.Position{Row: row, Col: col})
+			if piece != nil {
+				h ^= uint64(piece.Kind)*31 + uint64(piece.Color)*17
+				h *= prime
+			}
+		}
+	}
+
+	// include whose turn it is: same position, different turn = different hash
+	h ^= uint64(color)
+	h *= prime
+
+	return h
 }
 
 func applyMoveToBoard(board chess.Board, fromPos, toPos chess.Position) (chess.Board, error) {

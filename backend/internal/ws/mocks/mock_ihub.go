@@ -7,7 +7,8 @@ package mocks
 import (
 	reflect "reflect"
 
-	ws "github.com/alexbsec/AustralianChess/backend/internal/ws"
+	chess "github.com/alexbsec/AustralianChess/backend/internal/chess"
+	wsTypes "github.com/alexbsec/AustralianChess/backend/internal/ws/ws_types"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -35,10 +36,10 @@ func (m *MockIHub) EXPECT() *MockIHubMockRecorder {
 }
 
 // AddClient mocks base method.
-func (m *MockIHub) AddClient(arg0, arg1 string, arg2 ws.Conn) (*ws.Client, error) {
+func (m *MockIHub) AddClient(arg0, arg1 string, arg2 wsTypes.Conn) (*wsTypes.Client, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddClient", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*ws.Client)
+	ret0, _ := ret[0].(*wsTypes.Client)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -47,6 +48,18 @@ func (m *MockIHub) AddClient(arg0, arg1 string, arg2 ws.Conn) (*ws.Client, error
 func (mr *MockIHubMockRecorder) AddClient(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddClient", reflect.TypeOf((*MockIHub)(nil).AddClient), arg0, arg1, arg2)
+}
+
+// AddBot mocks base method.
+func (m *MockIHub) AddBot(arg0, arg1 string, arg2 chess.PieceColor) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddBot", arg0, arg1, arg2)
+}
+
+// AddBot indicates an expected call of AddBot.
+func (mr *MockIHubMockRecorder) AddBot(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBot", reflect.TypeOf((*MockIHub)(nil).AddBot), arg0, arg1, arg2)
 }
 
 // Broadcast mocks base method.
@@ -64,10 +77,10 @@ func (mr *MockIHubMockRecorder) Broadcast(arg0, arg1, arg2 interface{}) *gomock.
 }
 
 // GetRoomForTest mocks base method.
-func (m *MockIHub) GetRoomForTest(arg0 string) *ws.RoomClient {
+func (m *MockIHub) GetRoomForTest(arg0 string) *wsTypes.RoomClient {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRoomForTest", arg0)
-	ret0, _ := ret[0].(*ws.RoomClient)
+	ret0, _ := ret[0].(*wsTypes.RoomClient)
 	return ret0
 }
 
@@ -78,7 +91,7 @@ func (mr *MockIHubMockRecorder) GetRoomForTest(arg0 interface{}) *gomock.Call {
 }
 
 // RemoveClient mocks base method.
-func (m *MockIHub) RemoveClient(arg0 string, arg1 ws.Conn) {
+func (m *MockIHub) RemoveClient(arg0 string, arg1 wsTypes.Conn) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "RemoveClient", arg0, arg1)
 }
@@ -102,7 +115,7 @@ func (mr *MockIHubMockRecorder) SetOnRoomEmptyCallback(arg0 interface{}) *gomock
 }
 
 // SetRoomForTest mocks base method.
-func (m *MockIHub) SetRoomForTest(arg0 string, arg1 *ws.RoomClient) {
+func (m *MockIHub) SetRoomForTest(arg0 string, arg1 *wsTypes.RoomClient) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetRoomForTest", arg0, arg1)
 }

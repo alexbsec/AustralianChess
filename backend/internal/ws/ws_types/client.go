@@ -1,4 +1,4 @@
-package ws
+package ws_types
 
 import (
 	"sync"
@@ -74,3 +74,4 @@ func (c *Client) WritePing() error {
 	defer c.WriteMtx.Unlock()
 	return c.Conn.WriteMessage(websocket.PingMessage, nil)
 }
+

@@ -5,6 +5,7 @@ import { renderLandingPage } from "./pages/landing";
 import { renderRegisterPage } from "./pages/register";
 import { renderLoginPage } from "./pages/login";
 import { renderRoomPage } from "./pages/room";
+import { renderRoomBotPage } from "./pages/room_bot";
 
 const app = document.querySelector<HTMLDivElement>('#app')!; // Added !
 
@@ -35,6 +36,9 @@ function router(): void {
             return;
         case "/room":
             renderRoomPage(app);
+            return;
+        case "/room/bot":
+            renderRoomBotPage(app);
             return;
         default:
             renderNotFoundPage(app);

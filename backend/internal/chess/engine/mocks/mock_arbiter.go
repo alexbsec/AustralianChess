@@ -34,6 +34,21 @@ func (m *MockArbiter) EXPECT() *MockArbiterMockRecorder {
 	return m.recorder
 }
 
+// BestMove mocks base method.
+func (m *MockArbiter) BestMove(arg0 chess.Board, arg1 chess.PieceColor, arg2 int) (chess.Move, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BestMove", arg0, arg1, arg2)
+	ret0, _ := ret[0].(chess.Move)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// BestMove indicates an expected call of BestMove.
+func (mr *MockArbiterMockRecorder) BestMove(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BestMove", reflect.TypeOf((*MockArbiter)(nil).BestMove), arg0, arg1, arg2)
+}
+
 // CanMovePiece mocks base method.
 func (m *MockArbiter) CanMovePiece(arg0 chess.Board, arg1 chess.Piece, arg2, arg3 chess.Position) (bool, string) {
 	m.ctrl.T.Helper()

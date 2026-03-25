@@ -135,6 +135,8 @@ func (s *Service) UpdatePlayerJoined(ctx context.Context, roomId, playerId strin
 		GameStarted: false,
 	}
 
+	log.Printf("updating playerId: %s", playerId)
+
 	room, err := s.FetchRoom(ctx, roomId)
 	if err != nil {
 		return joinResult, err

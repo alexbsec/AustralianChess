@@ -5,9 +5,12 @@ import (
 	"log"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/auth"
+	"github.com/alexbsec/AustralianChess/backend/internal/chess/bot"
 	"github.com/alexbsec/AustralianChess/backend/internal/config"
+	"github.com/alexbsec/AustralianChess/backend/internal/contracts"
 	"github.com/alexbsec/AustralianChess/backend/internal/db"
 	"github.com/alexbsec/AustralianChess/backend/internal/db/repositories"
+	"github.com/alexbsec/AustralianChess/backend/internal/game"
 	ginChess "github.com/alexbsec/AustralianChess/backend/internal/http/gin"
 	"github.com/alexbsec/AustralianChess/backend/internal/ws"
 	"github.com/alexbsec/AustralianChess/backend/rooms"
@@ -31,9 +34,14 @@ func main() {
 	sessionSvc := sessions.NewService(sessionRepo)
 	userSvc := users.NewService(userRepo, sessionSvc)
 
-	roomSvc := rooms.NewService()
 	hub := ws.NewHub()
-	wsHandler := ws.NewHandler(roomSvc, userSvc, hub)
+	roomSvc := rooms.NewService()
+	botMangaer := bot.NewBotManager()
+	gameOrchestrator := game.NewGameOrchestrator(roomSvc, botMangaer, func(roomId string, result contracts.Result) error {
+		return hub.Broadcast(roomId, result, true)
+	})
+
+	wsHandler := ws.NewHandler(userSvc, hub, gameOrchestrator)
 	authorizer := auth.NewAuthorizer(sessionSvc)
 
 	router := ginChess.MakeHandlers(ctx, roomSvc, userSvc, wsHandler, authorizer)

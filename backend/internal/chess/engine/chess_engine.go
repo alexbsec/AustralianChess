@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
 )
@@ -157,6 +158,53 @@ func (ce *ChessEngine) PromotePawn(gameState *chess.GameState, requesteeColor ch
 		Type:    SuccessResponse,
 		Message: feedback,
 	}
+}
+
+// timeBudget caps wall-clock time per difficulty so the 12×12 board's
+// large branching factor doesn't make medium/hard unplayable.
+var timeBudget = map[int]time.Duration{
+	3: 2 * time.Second,
+	4: 3 * time.Second,
+	5: 4 * time.Second,
+}
+
+// stoppableArbiter is the optional interface for arbiters that support
+// early termination via a stop flag.
+type stoppableArbiter interface {
+	SetStop(bool)
+	IsStopped() bool
+}
+
+func (ce *ChessEngine) IterativeDeepening(board chess.Board, color chess.PieceColor, difficulty int) (chess.Move, bool) {
+	budget, ok := timeBudget[difficulty]
+	if !ok {
+		budget = 3 * time.Second
+	}
+
+	var sa stoppableArbiter
+	if s, ok := ce.arbiter.(stoppableArbiter); ok {
+		sa = s
+		sa.SetStop(false)
+		timer := time.AfterFunc(budget, func() { sa.SetStop(true) })
+		defer timer.Stop()
+	}
+
+	var bestMove chess.Move
+	found := false
+
+	for depth := 1; depth <= difficulty; depth++ {
+		move, ok := ce.arbiter.BestMove(board, color, depth)
+		if sa != nil && sa.IsStopped() {
+			// Mid-depth cut; keep result from the last fully-completed depth.
+			break
+		}
+		if ok {
+			bestMove = move
+			found = true
+		}
+	}
+
+	return bestMove, found
 }
 
 func promotePawn(gameState *chess.GameState, requesteeColor chess.PieceColor, toPiece chess.PieceKind, pawnPos chess.Position) {

@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"github.com/alexbsec/AustralianChess/backend/internal/chess"
+	wsTypes "github.com/alexbsec/AustralianChess/backend/internal/ws/ws_types"
 )
 
 type Hub struct {
 	mtx         sync.Mutex
-	roomClients map[string]*RoomClient
+	roomClients map[string]*wsTypes.RoomClient
 	onRoomEmpty func(roomId string)
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		roomClients: make(map[string]*RoomClient),
+		roomClients: make(map[string]*wsTypes.RoomClient),
 	}
 }
 
@@ -36,17 +37,21 @@ func (h *Hub) SetOnRoomEmptyCallback(callback func(roomId string)) {
 	h.onRoomEmpty = callback
 }
 
-func (h *Hub) AddClient(roomId, playerId string, conn Conn) (*Client, error) {
+func (h *Hub) AddClient(roomId, playerId string, conn wsTypes.Conn) (*wsTypes.Client, error) {
+	log.Printf("acquiring lock")
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 
+	log.Printf("lock acquired on AddClient")
+
 	if _, ok := h.roomClients[roomId]; !ok {
-		rc := NewRoomClient()
+		rc := wsTypes.NewRoomClient()
 		rc.LastActive = time.Now()
 		h.roomClients[roomId] = rc
 	}
 
 	room := h.roomClients[roomId]
+	log.Printf("AddClient: room: %v", *room)
 
 	if room.PlayerOne != nil && room.PlayerOne.PlayerId == playerId {
 		select {
@@ -72,19 +77,26 @@ func (h *Hub) AddClient(roomId, playerId string, conn Conn) (*Client, error) {
 		return room.PlayerTwo, nil
 	}
 
-	var client *Client
+	var client *wsTypes.Client
 
 	if room.PlayerOne == nil {
 		var color chess.PieceColor
-		if rand.Intn(2) == 0 {
+		if room.PlayerTwo != nil {
+			// PlayerTwo already assigned (e.g. bot) — take the opposite color
+			if *room.PlayerTwo.Color == chess.PieceWhite {
+				color = chess.PieceBlack
+			} else {
+				color = chess.PieceWhite
+			}
+		} else if rand.Intn(2) == 0 {
 			color = chess.PieceWhite
 		} else {
 			color = chess.PieceBlack
 		}
 
-		client = NewClient(roomId, conn).
+		client = wsTypes.NewClient(roomId, conn).
 			WithPlayerId(playerId).
-			WithRole(PlayerOne).
+			WithRole(wsTypes.PlayerOne).
 			WithColor(color)
 
 		room.PlayerOne = client
@@ -96,16 +108,16 @@ func (h *Hub) AddClient(roomId, playerId string, conn Conn) (*Client, error) {
 			color = chess.PieceWhite
 		}
 
-		client = NewClient(roomId, conn).
+		client = wsTypes.NewClient(roomId, conn).
 			WithPlayerId(playerId).
-			WithRole(PlayerTwo).
+			WithRole(wsTypes.PlayerTwo).
 			WithColor(color)
 
 		room.PlayerTwo = client
 	} else {
-		client = NewClient(roomId, conn).
+		client = wsTypes.NewClient(roomId, conn).
 			WithPlayerId(playerId).
-			WithRole(Spectator)
+			WithRole(wsTypes.Spectator)
 
 		room.Spectators[conn] = client
 	}
@@ -114,7 +126,26 @@ func (h *Hub) AddClient(roomId, playerId string, conn Conn) (*Client, error) {
 	return client, nil
 }
 
-func (h *Hub) RemoveClient(roomId string, conn Conn) {
+func (h *Hub) AddBot(roomId, botId string, color chess.PieceColor) {
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
+
+	if _, ok := h.roomClients[roomId]; !ok {
+		rc := wsTypes.NewRoomClient()
+		rc.LastActive = time.Now()
+		h.roomClients[roomId] = rc
+	}
+
+	room := h.roomClients[roomId]
+	botClient := wsTypes.NewClient(roomId, nil).
+					WithPlayerId(botId).
+					WithRole(wsTypes.PlayerTwo).
+					WithColor(color)
+
+	room.PlayerTwo = botClient
+}
+
+func (h *Hub) RemoveClient(roomId string, conn wsTypes.Conn) {
 	h.mtx.Lock()
 
 	room, ok := h.roomClients[roomId]
@@ -153,7 +184,7 @@ func (h *Hub) Broadcast(roomId string, message any, resetWarning bool) error {
 		room.WarningSent = false
 	}
 
-    clients := make([]*Client, 0, 2+len(room.Spectators))
+    clients := make([]*wsTypes.Client, 0, 2+len(room.Spectators))
     if room.PlayerOne != nil && room.PlayerOne.Conn != nil {
         clients = append(clients, room.PlayerOne)
     }
@@ -173,11 +204,11 @@ func (h *Hub) Broadcast(roomId string, message any, resetWarning bool) error {
     return nil
 }
 
-func (h *Hub) SetRoomForTest(roomId string, roomClient *RoomClient) {
+func (h *Hub) SetRoomForTest(roomId string, roomClient *wsTypes.RoomClient) {
 	h.addRoomForTest(roomId, roomClient)
 }
 
-func (h *Hub) GetRoomForTest(roomId string) *RoomClient {
+func (h *Hub) GetRoomForTest(roomId string) *wsTypes.RoomClient {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 	room, ok := h.roomClients[roomId]
@@ -226,7 +257,7 @@ func (h *Hub) cleanupRooms() {
 	}
 }
 
-func (h *Hub) addRoomForTest(roomId string, room *RoomClient) {
+func (h *Hub) addRoomForTest(roomId string, room *wsTypes.RoomClient) {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 	h.roomClients[roomId] = room

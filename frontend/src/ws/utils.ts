@@ -30,6 +30,16 @@ export function buildRoomWsUrl(roomId: string): string {
     return url.toString();
 }
 
+export function buildBotWsUrl(roomId: string, difficulty: number, playerPlayingAs: number): string {
+    const token = getAccessToken();
+    const url = new URL(`${getWsProtocol()}//${window.location.host}/api/v1/room/ws/bot`);
+    url.searchParams.set("token", token ?? "");
+    url.searchParams.set("roomId", roomId);
+    url.searchParams.set("difficulty", String(difficulty));
+    url.searchParams.set("player_playing_as", String(playerPlayingAs));
+    return url.toString();
+}
+
 function getWsProtocol(): "ws:" | "wss:" {
     return window.location.protocol === "https:" ? "wss:" : "ws:";
 }

@@ -7,4 +7,5 @@ type Arbiter interface {
 	IsInCheck(board chess.Board, turnColor chess.PieceColor) bool
 	IsCheckmate(board chess.Board, turnColor chess.PieceColor) bool
 	IsStalemate(board chess.Board, turnColor chess.PieceColor) bool
+	BestMove(board chess.Board, color chess.PieceColor, depth int) (chess.Move, bool)
 }

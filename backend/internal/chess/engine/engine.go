@@ -1,9 +1,12 @@
 package engine
 
-import "github.com/alexbsec/AustralianChess/backend/internal/chess"
+import (
+	"github.com/alexbsec/AustralianChess/backend/internal/chess"
+)
 
 type Engine interface {
 	GameResult(gameState *chess.GameState, turnColor chess.PieceColor) *chess.GameResult
 	ValidateAndMove(gameState *chess.GameState, requesteeColor chess.PieceColor, fromPos chess.Position, toPos chess.Position) ValidationResponse
 	PromotePawn(gameState *chess.GameState, requesteeColor chess.PieceColor, toPiece chess.PieceKind, pawnPos chess.Position, destPos chess.Position) ValidationResponse
+	IterativeDeepening(board chess.Board, color chess.PieceColor, difficulty int) (chess.Move, bool)
 }
