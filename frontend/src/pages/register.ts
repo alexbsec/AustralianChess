@@ -212,7 +212,7 @@ export function renderRegisterPage(container: HTMLDivElement): void {
                 body: JSON.stringify({
                     username,
                     password,
-                    confirm_password: confirmPassword,
+                    confirmPassword: confirmPassword,
                 }),
             });
 
